@@ -144,12 +144,14 @@ async function writeAsync(
 async function read(functionName: string, args: Array<string | boolean>) {
   const client = getClient()
 
+  // stateStatus is accepted at runtime but missing from the published
+  // type definitions, hence the cast.
   return client.readContract({
     address: CONTRACT_ADDRESS,
     functionName,
     args,
     stateStatus: 'accepted',
-  })
+  } as any)
 }
 
 /**
