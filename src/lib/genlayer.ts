@@ -28,19 +28,22 @@ export const getClient = (account?: string) => {
 
 export async function connectWallet(): Promise<string> {
   if (!window.ethereum) {
-    throw new Error('No browser wallet detected. Install MetaMask or a compatible wallet.')
+    throw new Error(
+      'No browser wallet detected. Install MetaMask or a compatible wallet.',
+    )
   }
 
   const accounts = (await window.ethereum.request({
     method: 'eth_requestAccounts',
   })) as string[]
 
-  if (!accounts?.[0]) throw new Error('Wallet connection was not approved.')
+  if (!accounts?.[0]) {
+    throw new Error('Wallet connection was not approved.')
+  }
 
   const address = normalizeAddress(accounts[0])
   const client = getClient(address)
 
-  // GenLayer SDK switches/configures the wallet for Studionet.
   await client.connect('studionet')
 
   return address
@@ -52,6 +55,7 @@ async function write(
   args: Array<string | boolean>,
 ) {
   const client = getClient(account)
+
   await client.connect('studionet')
 
   const hash = await client.writeContract({
@@ -64,7 +68,6 @@ async function write(
   const receipt = await client.waitForTransactionReceipt({
     hash,
     status: TransactionStatus.ACCEPTED,
-    fullTransaction: false,
   })
 
   return { hash, receipt }
@@ -72,11 +75,11 @@ async function write(
 
 async function read(functionName: string, args: string[]) {
   const client = getClient()
+
   return client.readContract({
     address: CONTRACT_ADDRESS,
     functionName,
     args,
-    stateStatus: 'accepted',
   })
 }
 
@@ -99,13 +102,22 @@ export const contract = {
     campaignId: string,
     description: string,
     evidenceUrl: string,
-  ) => write(account, 'submit_application', [campaignId, description, evidenceUrl]),
+  ) =>
+    write(account, 'submit_application', [
+      campaignId,
+      description,
+      evidenceUrl,
+    ]),
 
   judgeApplication: (
     account: string,
     campaignId: string,
     applicant: string,
-  ) => write(account, 'judge_application', [campaignId, normalizeAddress(applicant)]),
+  ) =>
+    write(account, 'judge_application', [
+      campaignId,
+      normalizeAddress(applicant),
+    ]),
 
   getCampaignName: (campaignId: string) =>
     read('get_campaign_name', [campaignId]) as Promise<string>,
@@ -120,14 +132,35 @@ export const contract = {
     read('is_campaign_active', [campaignId]) as Promise<boolean>,
 
   getApplicationStatus: (campaignId: string, applicant: string) =>
-    read('get_application_status', [campaignId, normalizeAddress(applicant)]) as Promise<string>,
+    read('get_application_status', [
+      campaignId,
+      normalizeAddress(applicant),
+    ]) as Promise<string>,
 
-  getApplicationDescription: (campaignId: string, applicant: string) =>
-    read('get_application_description', [campaignId, normalizeAddress(applicant)]) as Promise<string>,
+  getApplicationDescription: (
+    campaignId: string,
+    applicant: string,
+  ) =>
+    read('get_application_description', [
+      campaignId,
+      normalizeAddress(applicant),
+    ]) as Promise<string>,
 
-  getApplicationEvidence: (campaignId: string, applicant: string) =>
-    read('get_application_evidence', [campaignId, normalizeAddress(applicant)]) as Promise<string>,
+  getApplicationEvidence: (
+    campaignId: string,
+    applicant: string,
+  ) =>
+    read('get_application_evidence', [
+      campaignId,
+      normalizeAddress(applicant),
+    ]) as Promise<string>,
 
-  getApplicationReason: (campaignId: string, applicant: string) =>
-    read('get_application_reason', [campaignId, normalizeAddress(applicant)]) as Promise<string>,
+  getApplicationReason: (
+    campaignId: string,
+    applicant: string,
+  ) =>
+    read('get_application_reason', [
+      campaignId,
+      normalizeAddress(applicant),
+    ]) as Promise<string>,
 }
