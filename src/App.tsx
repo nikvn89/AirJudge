@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowRight,
+  BadgeCheck,
   Bot,
   CheckCircle2,
   ExternalLink,
   FileCheck2,
+  Fingerprint,
   Gavel,
   LoaderCircle,
   Search,
@@ -15,7 +17,12 @@ import {
 import WalletButton from './components/WalletButton'
 import StatusPill from './components/StatusPill'
 import { CONTRACT_ADDRESS, EXPLORER_BASE } from './lib/config'
-import { connectWallet, contract, normalizeAddress } from './lib/genlayer'
+import {
+  checkEvidenceUrl,
+  connectWallet,
+  contract,
+  normalizeAddress,
+} from './lib/genlayer'
 import { getRecentCampaigns, rememberCampaign } from './lib/storage'
 
 type Campaign = {
@@ -49,6 +56,10 @@ export default function App() {
   const [busy, setBusy] = useState('')
   const [recent, setRecent] = useState<string[]>([])
 
+  const [handle, setHandle] = useState('')
+  const [handleInput, setHandleInput] = useState('')
+  const [handleChecked, setHandleChecked] = useState(false)
+
   const [createForm, setCreateForm] = useState({
     id: '',
     name: '',
@@ -63,10 +74,32 @@ export default function App() {
     evidence: '',
   })
 
+  const [evidenceWarning, setEvidenceWarning] = useState('')
+
   const [lookupWallet, setLookupWallet] = useState('')
   const [application, setApplication] = useState<Application | null>(null)
 
   useEffect(() => setRecent(getRecentCampaigns()), [])
+
+  const refreshHandle = useCallback(async (address: string) => {
+    if (!address) {
+      setHandle('')
+      setHandleChecked(false)
+      return
+    }
+    try {
+      const value = clean(await contract.getHandle(address))
+      setHandle(value)
+    } catch {
+      setHandle('')
+    } finally {
+      setHandleChecked(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshHandle(account)
+  }, [account, refreshHandle])
 
   useEffect(() => {
     if (!window.ethereum?.on) return
@@ -90,7 +123,13 @@ export default function App() {
   const explorerContract = `${EXPLORER_BASE}/address/${CONTRACT_ADDRESS}`
 
   const canJudge = useMemo(
-    () => Boolean(account && campaign && application?.applicant && application.status === 'PENDING'),
+    () =>
+      Boolean(
+        account &&
+          campaign &&
+          application?.applicant &&
+          application.status === 'PENDING',
+      ),
     [account, campaign, application],
   )
 
@@ -101,7 +140,10 @@ export default function App() {
       const address = await connectWallet()
       setAccount(address)
       setLookupWallet(address)
-      setNotice({ kind: 'success', message: 'Wallet connected to GenLayer Studionet.' })
+      setNotice({
+        kind: 'success',
+        message: 'Wallet connected to GenLayer Studionet.',
+      })
     } catch (e) {
       setNotice({ kind: 'error', message: errorMessage(e) })
     } finally {
@@ -109,16 +151,61 @@ export default function App() {
     }
   }
 
+  async function handleRegisterHandle(e: React.FormEvent) {
+    e.preventDefault()
+    if (!account) return requireWallet()
+
+    const value = handleInput.trim().toLowerCase()
+    if (value.length < 2) {
+      setNotice({
+        kind: 'error',
+        message: 'Enter the public handle that appears on your work, at least 2 characters.',
+      })
+      return
+    }
+
+    setBusy('handle')
+    setNotice({
+      kind: 'info',
+      message: 'Binding your handle to this wallet onchain…',
+    })
+    try {
+      const { hash } = await contract.registerHandle(account, value)
+      setHandle(value)
+      setHandleInput('')
+      setNotice({
+        kind: 'success',
+        message: `Handle "${value}" is now permanently bound to this wallet.`,
+        tx: hash,
+      })
+    } catch (e) {
+      setNotice({ kind: 'error', message: errorMessage(e) })
+    } finally {
+      setBusy('')
+    }
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     if (!account) return requireWallet()
-    if (!createForm.id.trim() || !createForm.name.trim() || createForm.criteria.trim().length < 20) {
-      setNotice({ kind: 'error', message: 'Enter a campaign ID, name, and criteria of at least 20 characters.' })
+    if (
+      !createForm.id.trim() ||
+      !createForm.name.trim() ||
+      createForm.criteria.trim().length < 20
+    ) {
+      setNotice({
+        kind: 'error',
+        message:
+          'Enter a campaign ID, name, and criteria of at least 20 characters.',
+      })
       return
     }
 
     setBusy('create')
-    setNotice({ kind: 'info', message: 'Creating campaign and waiting for GenLayer acceptance…' })
+    setNotice({
+      kind: 'info',
+      message: 'Creating campaign and waiting for GenLayer acceptance…',
+    })
     try {
       const { hash } = await contract.createCampaign(
         account,
@@ -155,23 +242,28 @@ export default function App() {
       const parsedName = clean(name)
       if (!parsedName) throw new Error('Campaign not found. Check the campaign ID.')
 
-      const data = {
+      setCampaign({
         id,
         name: parsedName,
         criteria: clean(criteria),
         creator: clean(creator),
         active: Boolean(active),
-      }
-      setCampaign(data)
+      })
       setCampaignId(id)
       setRecent(rememberCampaign(id))
       setApplication(null)
+      setEvidenceWarning('')
     } catch (e) {
       setCampaign(null)
       setNotice({ kind: 'error', message: errorMessage(e) })
     } finally {
       setBusy('')
     }
+  }
+
+  function onEvidenceChange(value: string) {
+    setSubmitForm({ ...submitForm, evidence: value })
+    setEvidenceWarning(value.trim() ? checkEvidenceUrl(value) ?? '' : '')
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -181,18 +273,46 @@ export default function App() {
       setNotice({ kind: 'error', message: 'Load a campaign first.' })
       return
     }
-    if (submitForm.description.trim().length < 20) {
-      setNotice({ kind: 'error', message: 'Contribution description must be at least 20 characters.' })
+    if (!handle) {
+      setNotice({
+        kind: 'error',
+        message:
+          'Register a public handle first. Validators use it to prove you authored the evidence.',
+      })
       return
     }
-    if (!submitForm.evidence.trim().startsWith('https://')) {
-      setNotice({ kind: 'error', message: 'Evidence URL must begin with https://.' })
+    if (submitForm.description.trim().length < 20) {
+      setNotice({
+        kind: 'error',
+        message: 'Contribution description must be at least 20 characters.',
+      })
+      return
+    }
+
+    const urlProblem = checkEvidenceUrl(submitForm.evidence)
+    if (urlProblem) {
+      setEvidenceWarning(urlProblem)
+      setNotice({ kind: 'error', message: urlProblem })
       return
     }
 
     setBusy('submit')
-    setNotice({ kind: 'info', message: 'Submitting contribution evidence onchain…' })
+    setNotice({ kind: 'info', message: 'Checking the evidence URL…' })
     try {
+      const alreadyUsed = await contract.isEvidenceUsed(
+        campaign.id,
+        submitForm.evidence,
+      )
+      if (alreadyUsed) {
+        throw new Error(
+          'This evidence URL has already been submitted to this campaign. Each piece of evidence can back one application per campaign.',
+        )
+      }
+
+      setNotice({
+        kind: 'info',
+        message: 'Submitting contribution evidence onchain…',
+      })
       const { hash } = await contract.submitApplication(
         account,
         campaign.id,
@@ -200,7 +320,11 @@ export default function App() {
         submitForm.evidence.trim(),
       )
       setLookupWallet(account)
-      setNotice({ kind: 'success', message: 'Application submitted. Status is now PENDING.', tx: hash })
+      setNotice({
+        kind: 'success',
+        message: 'Application submitted. Status is now PENDING.',
+        tx: hash,
+      })
       await loadApplication(account)
     } catch (e) {
       setNotice({ kind: 'error', message: errorMessage(e) })
@@ -219,7 +343,6 @@ export default function App() {
     if (!applicant) return
 
     setBusy('lookup')
-    setNotice(null)
     try {
       const address = normalizeAddress(applicant)
       const [status, description, evidence, reason] = await Promise.all([
@@ -230,7 +353,8 @@ export default function App() {
       ])
 
       const parsedStatus = clean(status)
-      if (!parsedStatus) throw new Error('No application found for this wallet and campaign.')
+      if (!parsedStatus)
+        throw new Error('No application found for this wallet and campaign.')
 
       setLookupWallet(address)
       setApplication({
@@ -252,57 +376,105 @@ export default function App() {
     if (!account) return requireWallet()
     if (!campaign || !application) return
 
+    const applicant = application.applicant
+
     setBusy('judge')
     setNotice({
       kind: 'info',
-      message: 'GenLayer validators are reading the evidence and adjudicating eligibility. This can take longer than a normal transaction.',
+      message:
+        'Submitting to the validator set. Each validator fetches the evidence and adjudicates independently — this usually takes one to two minutes.',
     })
     try {
       const { hash } = await contract.judgeApplication(
         account,
         campaign.id,
-        application.applicant,
+        applicant,
       )
-      setNotice({ kind: 'success', message: 'AI consensus accepted. Refreshing the onchain verdict…', tx: hash })
-      await loadApplication(application.applicant)
+
+      setNotice({
+        kind: 'info',
+        message:
+          'Transaction submitted. Waiting for validators to reach consensus…',
+        tx: hash,
+      })
+
+      const verdict = await contract.awaitVerdict(campaign.id, applicant)
+      await loadApplication(applicant)
+
+      setNotice({
+        kind: 'success',
+        message: `Consensus reached. Verdict: ${clean(verdict)}.`,
+        tx: hash,
+      })
     } catch (e) {
       setNotice({ kind: 'error', message: errorMessage(e) })
+      await loadApplication(applicant).catch(() => undefined)
     } finally {
       setBusy('')
     }
   }
 
   function requireWallet() {
-    setNotice({ kind: 'error', message: 'Connect a wallet before sending a transaction.' })
+    setNotice({
+      kind: 'error',
+      message: 'Connect a wallet before sending a transaction.',
+    })
   }
+
+  const needsHandle = Boolean(account) && handleChecked && !handle
 
   return (
     <div className="app-shell">
       <nav className="nav">
         <a className="brand" href="#">
-          <div className="brand-mark"><Gavel size={20} /></div>
+          <div className="brand-mark">
+            <Gavel size={20} />
+          </div>
           <div>
             <strong>AirJudge</strong>
             <span>on GenLayer</span>
           </div>
         </a>
         <div className="nav-actions">
-          <a className="ghost-link" href={explorerContract} target="_blank" rel="noreferrer">
+          {handle && (
+            <span className="handle-chip">
+              <BadgeCheck size={14} /> {handle}
+            </span>
+          )}
+          <a
+            className="ghost-link"
+            href={explorerContract}
+            target="_blank"
+            rel="noreferrer"
+          >
             Contract <ExternalLink size={14} />
           </a>
-          <WalletButton account={account} onConnect={handleConnect} busy={walletBusy} />
+          <WalletButton
+            account={account}
+            onConnect={handleConnect}
+            busy={walletBusy}
+          />
         </div>
       </nav>
 
       <main>
         <section className="hero">
-          <div className="hero-badge"><Sparkles size={15} /> Decentralized contribution adjudication</div>
-          <h1>Reward real contribution.<br /><span>Let evidence decide.</span></h1>
+          <div className="hero-badge">
+            <Sparkles size={15} /> Decentralized contribution adjudication
+          </div>
+          <h1>
+            Reward real contribution.
+            <br />
+            <span>Let evidence decide.</span>
+          </h1>
           <p>
-            Create natural-language eligibility rules, let contributors submit public evidence,
-            and use GenLayer's AI-validator consensus to resolve who qualifies.
+            Create natural-language eligibility rules, let contributors submit public
+            evidence, and use GenLayer's AI-validator consensus to resolve who
+            qualifies — with authorship proven onchain before anyone is approved.
           </p>
           <div className="hero-flow">
+            <Flow icon={<Fingerprint />} label="Bind identity" />
+            <ArrowRight className="flow-arrow" />
             <Flow icon={<FileCheck2 />} label="Set criteria" />
             <ArrowRight className="flow-arrow" />
             <Flow icon={<Search />} label="Submit evidence" />
@@ -319,8 +491,73 @@ export default function App() {
           <div className="section-heading">
             <span>01</span>
             <div>
+              <h2>Bind your identity</h2>
+              <p>
+                Link the public handle that appears on your work. Validators match it
+                against the evidence page before approving anything, so nobody can
+                claim someone else's contribution.
+              </p>
+            </div>
+          </div>
+
+          <div className="card">
+            {!account && (
+              <p className="muted">Connect a wallet to register a handle.</p>
+            )}
+
+            {handle && (
+              <div className="handle-panel">
+                <BadgeCheck size={20} />
+                <div>
+                  <span>Registered handle</span>
+                  <strong>{handle}</strong>
+                  <small>
+                    Permanently bound to this wallet — a handle cannot be changed once
+                    set.
+                  </small>
+                </div>
+              </div>
+            )}
+
+            {needsHandle && (
+              <form className="search-row" onSubmit={handleRegisterHandle}>
+                <input
+                  placeholder="your-github-or-x-handle"
+                  value={handleInput}
+                  onChange={(e) => setHandleInput(e.target.value)}
+                />
+                <button className="primary" disabled={busy === 'handle'}>
+                  {busy === 'handle' ? (
+                    <>
+                      <LoaderCircle className="spin" size={17} /> Binding…
+                    </>
+                  ) : (
+                    <>
+                      <Fingerprint size={17} /> Register
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {needsHandle && (
+              <small className="muted">
+                Use the name as it appears publicly on your work — a GitHub username, an
+                X handle, or a byline. This is set once and cannot be edited.
+              </small>
+            )}
+          </div>
+        </section>
+
+        <section className="workspace">
+          <div className="section-heading">
+            <span>02</span>
+            <div>
               <h2>Create a campaign</h2>
-              <p>Define subjective eligibility in plain English. The rules become the court's rubric.</p>
+              <p>
+                Define subjective eligibility in plain English. The rules become the
+                court's rubric.
+              </p>
             </div>
           </div>
 
@@ -329,33 +566,51 @@ export default function App() {
               <input
                 placeholder="builders-airdrop-2026"
                 value={createForm.id}
-                onChange={(e) => setCreateForm({ ...createForm, id: e.target.value })}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, id: e.target.value })
+                }
               />
             </Field>
             <Field label="Campaign name">
               <input
                 placeholder="GenLayer Builder Rewards"
                 value={createForm.name}
-                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, name: e.target.value })
+                }
               />
             </Field>
-            <Field className="full" label="Eligibility criteria" hint="Describe what counts as a meaningful contribution.">
+            <Field
+              className="full"
+              label="Eligibility criteria"
+              hint="Describe what counts as a meaningful contribution."
+            >
               <textarea
                 rows={5}
                 placeholder="Applicant must provide a public, original and meaningful technical contribution..."
                 value={createForm.criteria}
-                onChange={(e) => setCreateForm({ ...createForm, criteria: e.target.value })}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, criteria: e.target.value })
+                }
               />
             </Field>
             <button className="primary full" disabled={busy === 'create'}>
-              {busy === 'create' ? <><LoaderCircle className="spin" size={18} /> Creating…</> : <>Create campaign <ArrowRight size={18} /></>}
+              {busy === 'create' ? (
+                <>
+                  <LoaderCircle className="spin" size={18} /> Creating…
+                </>
+              ) : (
+                <>
+                  Create campaign <ArrowRight size={18} />
+                </>
+              )}
             </button>
           </form>
         </section>
 
         <section className="workspace">
           <div className="section-heading">
-            <span>02</span>
+            <span>03</span>
             <div>
               <h2>Open a campaign</h2>
               <p>Load any campaign by its onchain ID.</p>
@@ -370,8 +625,16 @@ export default function App() {
                 onChange={(e) => setCampaignId(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && loadCampaign()}
               />
-              <button className="secondary" onClick={() => loadCampaign()} disabled={busy === 'load'}>
-                {busy === 'load' ? <LoaderCircle className="spin" size={17} /> : <Search size={17} />}
+              <button
+                className="secondary"
+                onClick={() => loadCampaign()}
+                disabled={busy === 'load'}
+              >
+                {busy === 'load' ? (
+                  <LoaderCircle className="spin" size={17} />
+                ) : (
+                  <Search size={17} />
+                )}
                 Load
               </button>
             </div>
@@ -380,7 +643,9 @@ export default function App() {
               <div className="recent">
                 <span>Recent</span>
                 {recent.map((id) => (
-                  <button key={id} onClick={() => loadCampaign(id)}>{id}</button>
+                  <button key={id} onClick={() => loadCampaign(id)}>
+                    {id}
+                  </button>
                 ))}
               </div>
             )}
@@ -410,7 +675,7 @@ export default function App() {
           <section className="two-col">
             <div className="workspace">
               <div className="section-heading">
-                <span>03</span>
+                <span>04</span>
                 <div>
                   <h2>Submit contribution</h2>
                   <p>Your claim is untrusted until public evidence supports it.</p>
@@ -418,33 +683,74 @@ export default function App() {
               </div>
 
               <form className="card" onSubmit={handleSubmit}>
+                {needsHandle && (
+                  <div className="inline-warning">
+                    <Fingerprint size={16} />
+                    <span>
+                      Register a handle in step 01 before applying. Validators need it
+                      to verify you authored the evidence.
+                    </span>
+                  </div>
+                )}
+
                 <Field label="Contribution description">
                   <textarea
                     rows={5}
                     placeholder="I created an original technical tutorial explaining..."
                     value={submitForm.description}
-                    onChange={(e) => setSubmitForm({ ...submitForm, description: e.target.value })}
+                    onChange={(e) =>
+                      setSubmitForm({ ...submitForm, description: e.target.value })
+                    }
                   />
                 </Field>
-                <Field label="Public evidence URL" hint="Must be a public https:// page GenLayer can render.">
+                <Field
+                  label="Public evidence URL"
+                  hint={
+                    handle
+                      ? `The page must publicly show "${handle}" as its author.`
+                      : 'Must be a public https:// page GenLayer can render.'
+                  }
+                >
                   <input
                     placeholder="https://..."
                     value={submitForm.evidence}
-                    onChange={(e) => setSubmitForm({ ...submitForm, evidence: e.target.value })}
+                    onChange={(e) => onEvidenceChange(e.target.value)}
                   />
                 </Field>
-                <button className="primary" disabled={busy === 'submit'}>
-                  {busy === 'submit' ? <><LoaderCircle className="spin" size={18} /> Submitting…</> : <>Submit evidence <ArrowRight size={18} /></>}
+
+                {evidenceWarning && (
+                  <div className="inline-warning">
+                    <XCircle size={16} />
+                    <span>{evidenceWarning}</span>
+                  </div>
+                )}
+
+                <button
+                  className="primary"
+                  disabled={busy === 'submit' || needsHandle || Boolean(evidenceWarning)}
+                >
+                  {busy === 'submit' ? (
+                    <>
+                      <LoaderCircle className="spin" size={18} /> Submitting…
+                    </>
+                  ) : (
+                    <>
+                      Submit evidence <ArrowRight size={18} />
+                    </>
+                  )}
                 </button>
               </form>
             </div>
 
             <div className="workspace">
               <div className="section-heading">
-                <span>04</span>
+                <span>05</span>
                 <div>
                   <h2>Adjudicate</h2>
-                  <p>Inspect an application, then ask GenLayer validators for a consensus verdict.</p>
+                  <p>
+                    Inspect an application, then ask GenLayer validators for a consensus
+                    verdict.
+                  </p>
                 </div>
               </div>
 
@@ -456,14 +762,29 @@ export default function App() {
                       value={lookupWallet}
                       onChange={(e) => setLookupWallet(e.target.value)}
                     />
-                    <button className="secondary" type="button" onClick={() => loadApplication()} disabled={busy === 'lookup'}>
-                      {busy === 'lookup' ? <LoaderCircle className="spin" size={17} /> : <Search size={17} />}
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => loadApplication()}
+                      disabled={busy === 'lookup'}
+                    >
+                      {busy === 'lookup' ? (
+                        <LoaderCircle className="spin" size={17} />
+                      ) : (
+                        <Search size={17} />
+                      )}
                     </button>
                   </div>
                 </Field>
 
                 {account && !lookupWallet && (
-                  <button className="text-button" onClick={() => { setLookupWallet(account); loadApplication(account) }}>
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      setLookupWallet(account)
+                      loadApplication(account)
+                    }}
+                  >
                     Use connected wallet
                   </button>
                 )}
@@ -475,9 +796,13 @@ export default function App() {
                         <span>Application status</span>
                         <StatusPill status={application.status} />
                       </div>
-                      {application.status === 'ELIGIBLE' ? <CheckCircle2 className="verdict-icon good" /> :
-                        application.status === 'NOT_ELIGIBLE' ? <XCircle className="verdict-icon bad" /> :
-                        <Bot className="verdict-icon" />}
+                      {application.status === 'ELIGIBLE' ? (
+                        <CheckCircle2 className="verdict-icon good" />
+                      ) : application.status === 'NOT_ELIGIBLE' ? (
+                        <XCircle className="verdict-icon bad" />
+                      ) : (
+                        <Bot className="verdict-icon" />
+                      )}
                     </div>
 
                     <div className="application-detail">
@@ -487,7 +812,11 @@ export default function App() {
 
                     <div className="application-detail">
                       <span>Evidence</span>
-                      <a href={application.evidence} target="_blank" rel="noreferrer">
+                      <a
+                        href={application.evidence}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         {application.evidence} <ExternalLink size={13} />
                       </a>
                     </div>
@@ -503,10 +832,21 @@ export default function App() {
                     )}
 
                     {application.status === 'PENDING' && (
-                      <button className="judge-button" disabled={!canJudge || busy === 'judge'} onClick={handleJudge}>
-                        {busy === 'judge'
-                          ? <><LoaderCircle className="spin" size={19} /> Validators judging…</>
-                          : <><Gavel size={19} /> Run GenLayer adjudication</>}
+                      <button
+                        className="judge-button"
+                        disabled={!canJudge || busy === 'judge'}
+                        onClick={handleJudge}
+                      >
+                        {busy === 'judge' ? (
+                          <>
+                            <LoaderCircle className="spin" size={19} /> Validators
+                            judging…
+                          </>
+                        ) : (
+                          <>
+                            <Gavel size={19} /> Run GenLayer adjudication
+                          </>
+                        )}
                       </button>
                     )}
                   </div>
@@ -518,18 +858,33 @@ export default function App() {
 
         <section className="proof-section">
           <div className="proof-copy">
-            <div className="hero-badge"><ShieldCheck size={15} /> Why GenLayer</div>
+            <div className="hero-badge">
+              <ShieldCheck size={15} /> Why GenLayer
+            </div>
             <h2>Not another points checker.</h2>
             <p>
-              Deterministic rules can count transactions. AirJudge handles the ambiguous part:
-              whether unstructured public evidence actually satisfies a natural-language contribution policy.
+              Deterministic rules can count transactions. AirJudge handles the ambiguous
+              part: whether unstructured public evidence actually satisfies a
+              natural-language contribution policy — and whether the applicant wrote it.
             </p>
           </div>
           <div className="proof-grid">
-            <Proof title="Natural-language rules" text="Campaign criteria can express quality, relevance and originality—not just numeric thresholds." />
-            <Proof title="Public evidence" text="The applicant's claim is not trusted by default. Validators inspect the submitted public source." />
-            <Proof title="AI-validator consensus" text="The verdict is resolved through GenLayer adjudication rather than a single centralized model." />
-            <Proof title="Onchain finality" text="ELIGIBLE / NOT_ELIGIBLE is persisted as contract state for downstream reward systems." />
+            <Proof
+              title="Authorship proven onchain"
+              text="A wallet binds to a public handle once. Validators must find that handle on the evidence page, and the contract forces a rejection if they cannot."
+            />
+            <Proof
+              title="Evidence cannot be reused"
+              text="Each evidence URL is burned per campaign, so one good article cannot be farmed across many wallets."
+            />
+            <Proof
+              title="AI-validator consensus"
+              text="The verdict is resolved through GenLayer adjudication rather than a single centralized model."
+            />
+            <Proof
+              title="Onchain finality"
+              text="ELIGIBLE / NOT_ELIGIBLE is persisted as contract state for downstream reward systems."
+            />
           </div>
         </section>
       </main>
@@ -569,22 +924,40 @@ function Field({
 }
 
 function Flow({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return <div className="flow-item">{icon}<span>{label}</span></div>
+  return (
+    <div className="flow-item">
+      {icon}
+      <span>{label}</span>
+    </div>
+  )
 }
 
 function Proof({ title, text }: { title: string; text: string }) {
-  return <div className="proof-card"><h3>{title}</h3><p>{text}</p></div>
+  return (
+    <div className="proof-card">
+      <h3>{title}</h3>
+      <p>{text}</p>
+    </div>
+  )
 }
 
 function NoticeCard({ notice }: { notice: Exclude<Notice, null> }) {
   return (
     <div className={`notice ${notice.kind}`}>
-      {notice.kind === 'success' ? <CheckCircle2 size={18} /> :
-       notice.kind === 'error' ? <XCircle size={18} /> :
-       <LoaderCircle className="spin" size={18} />}
+      {notice.kind === 'success' ? (
+        <CheckCircle2 size={18} />
+      ) : notice.kind === 'error' ? (
+        <XCircle size={18} />
+      ) : (
+        <LoaderCircle className="spin" size={18} />
+      )}
       <span>{notice.message}</span>
       {notice.tx && (
-        <a href={`${EXPLORER_BASE}/tx/${notice.tx}`} target="_blank" rel="noreferrer">
+        <a
+          href={`${EXPLORER_BASE}/tx/${notice.tx}`}
+          target="_blank"
+          rel="noreferrer"
+        >
           View tx <ExternalLink size={13} />
         </a>
       )}
