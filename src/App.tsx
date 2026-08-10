@@ -232,12 +232,14 @@ export default function App() {
     setBusy('load')
     setNotice(null)
     try {
-      const [name, criteria, creator, active] = await Promise.all([
-        contract.getCampaignName(id),
-        contract.getCampaignCriteria(id),
-        contract.getCampaignCreator(id),
-        contract.isCampaignActive(id),
-      ])
+      // Sequential, not Promise.all: four simultaneous RPC calls count
+      // against Studio's per-minute limit all at once and get throttled.
+      const name = await contract.getCampaignName(id)
+      const parsedNameEarly = clean(name)
+      if (!parsedNameEarly) throw new Error('Campaign not found. Check the campaign ID.')
+      const criteria = await contract.getCampaignCriteria(id)
+      const creator = await contract.getCampaignCreator(id)
+      const active = await contract.isCampaignActive(id)
 
       const parsedName = clean(name)
       if (!parsedName) throw new Error('Campaign not found. Check the campaign ID.')
@@ -345,16 +347,16 @@ export default function App() {
     setBusy('lookup')
     try {
       const address = normalizeAddress(applicant)
-      const [status, description, evidence, reason] = await Promise.all([
-        contract.getApplicationStatus(campaign.id, address),
-        contract.getApplicationDescription(campaign.id, address),
-        contract.getApplicationEvidence(campaign.id, address),
-        contract.getApplicationReason(campaign.id, address),
-      ])
+      // Sequential on purpose — see loadCampaign.
+      const status = await contract.getApplicationStatus(campaign.id, address)
 
       const parsedStatus = clean(status)
       if (!parsedStatus)
         throw new Error('No application found for this wallet and campaign.')
+
+      const description = await contract.getApplicationDescription(campaign.id, address)
+      const evidence = await contract.getApplicationEvidence(campaign.id, address)
+      const reason = await contract.getApplicationReason(campaign.id, address)
 
       setLookupWallet(address)
       setApplication({
@@ -364,6 +366,10 @@ export default function App() {
         evidence: clean(evidence),
         reason: clean(reason),
       })
+      // A successful lookup supersedes any stale error banner from an
+      // earlier attempt — otherwise a red RPC notice sits above a result
+      // that actually loaded fine.
+      setNotice((current) => (current?.kind === 'error' ? null : current))
     } catch (e) {
       setApplication(null)
       setNotice({ kind: 'error', message: errorMessage(e) })
@@ -408,7 +414,9 @@ export default function App() {
       })
     } catch (e) {
       setNotice({ kind: 'error', message: errorMessage(e) })
-      await loadApplication(applicant).catch(() => undefined)
+      // Do NOT call loadApplication here — if the RPC is flaky, it will
+      // null out the application state and hide the judge button, making
+      // it impossible for the user to retry.
     } finally {
       setBusy('')
     }
