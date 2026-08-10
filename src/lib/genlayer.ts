@@ -42,9 +42,6 @@ export async function connectWallet(): Promise<string> {
   }
 
   const address = normalizeAddress(accounts[0])
-  const client = getClient(address)
-
-  await client.connect('studionet')
 
   return address
 }
@@ -91,8 +88,6 @@ async function write(
 ) {
   const client = getClient(account)
 
-  await client.connect('studionet')
-
   const hash = await client.writeContract({
     address: CONTRACT_ADDRESS,
     functionName,
@@ -123,8 +118,6 @@ async function writeAsync(
   args: Array<string | boolean>,
 ) {
   const client = getClient(account)
-
-  await client.connect('studionet')
 
   const hash = await client.writeContract({
     address: CONTRACT_ADDRESS,
