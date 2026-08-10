@@ -157,26 +157,40 @@ export async function pollUntil<T>(
   done: (value: T) => boolean,
   options: { timeoutMs?: number; intervalMs?: number; maxIntervalMs?: number } = {},
 ): Promise<T> {
-  const timeoutMs = options.timeoutMs ?? 240_000
-  const maxIntervalMs = options.maxIntervalMs ?? 8_000
-  let interval = options.intervalMs ?? 3_000
+  const timeoutMs = options.timeoutMs ?? 300_000
+  const maxIntervalMs = options.maxIntervalMs ?? 15_000
+  let interval = options.intervalMs ?? 6_000
 
   const deadline = Date.now() + timeoutMs
-  let last = await fetcher()
 
-  while (!done(last)) {
+  // A single failed read must not abort the wait. The transaction is
+  // already onchain and validators keep working regardless of whether
+  // one poll got throttled, so transient errors are swallowed and the
+  // loop simply tries again on the next tick.
+  let last: T | undefined
+  let lastError: unknown
+
+  for (;;) {
+    try {
+      last = await fetcher()
+      lastError = undefined
+      if (done(last)) return last
+    } catch (e) {
+      lastError = e
+    }
+
     if (Date.now() >= deadline) {
-      throw new Error(
-        'Adjudication is taking longer than expected. It may still finish — reload in a minute to check.',
-      )
+      if (last !== undefined) return last
+      throw lastError instanceof Error
+        ? lastError
+        : new Error(
+            'Adjudication is taking longer than expected. It may still finish — search the applicant again in a minute to check.',
+          )
     }
 
     await sleep(interval)
     interval = Math.min(interval * 1.4, maxIntervalMs)
-    last = await fetcher()
   }
-
-  return last
 }
 
 /* ------------------------------------------------------------------ */
