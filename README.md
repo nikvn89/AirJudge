@@ -1,8 +1,8 @@
 # ⚖️ AirJudge — Decentralized Contribution Eligibility on GenLayer
 
 **Live:** https://air-judge.vercel.app
-**Contract (GenVM StudioNet):** `0xfd88Ffe790f90c361BB5bdEBC1A483a3d37699F5`
-**Explorer:** https://explorer-studio.genlayer.com/address/0xfd88Ffe790f90c361BB5bdEBC1A483a3d37699F5
+**Contract (GenVM StudioNet):** `0x7Caa41e15cdbDdCB4b7165F4a9eCE2694bB6A05A`
+**Explorer:** https://explorer-studio.genlayer.com/address/0x7Caa41e15cdbDdCB4b7165F4a9eCE2694bB6A05A
 
 A full-stack dApp that lets anyone create airdrop or reward campaigns with eligibility rules written in plain English, and uses GenLayer's AI-validator consensus to adjudicate whether a contributor's public evidence actually qualifies — with authorship proven onchain before anyone is approved.
 
