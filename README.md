@@ -1,6 +1,6 @@
 ⚖️ AirJudge --- Decentralized Contribution Eligibility & Reward Settlement on GenLayer
 
-Live: https://air-judge.vercel.app\Contract (GenVM StudioNet):0x7Caa41e15cdbDdCB4b7165F4a9eCE2694bB6A05AExplorer:https://explorer-studio.genlayer.com/address/0x7Caa41e15cdbDdCB4b7165F4a9eCE2694bB6A05A
+Live: https://air-judge.vercel.app\Contract (GenVM StudioNet):0x29c49872d34361FdC72C0528f7fCeB97F1eeda95Explorer:https://explorer-studio.genlayer.com/address/0x29c49872d34361FdC72C0528f7fCeB97F1eeda95
 
 AirJudge is a full-stack GenLayer dApp for contribution-based rewardcampaigns.
 
