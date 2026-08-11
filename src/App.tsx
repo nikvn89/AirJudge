@@ -1,5 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import {
+  useCallback,
+  useMemo,
+  useState,
+} from 'react'
+
+import type {
+  FormEvent,
+} from 'react'
+
 import './styles.css'
 
 import {
@@ -14,6 +22,7 @@ import {
   normalizeAddress,
   parseGenToWei,
   pollApplicationStatus,
+  sleep,
 } from './lib/genlayer'
 
 import StatusPill from './components/StatusPill'
@@ -58,74 +67,218 @@ const short = (
   head = 7,
   tail = 5,
 ) =>
-  value && value.length > head + tail + 3
-    ? `${value.slice(0, head)}…${value.slice(-tail)}`
+  value &&
+  value.length >
+    head + tail + 3
+    ? `${value.slice(
+        0,
+        head,
+      )}…${value.slice(
+        -tail,
+      )}`
     : value
 
 const contractConfigured =
   Boolean(CONTRACT_ADDRESS) &&
-  /^0x[a-fA-F0-9]{40}$/.test(CONTRACT_ADDRESS)
+  /^0x[a-fA-F0-9]{40}$/.test(
+    CONTRACT_ADDRESS,
+  )
+
+async function copyText(
+  value: string,
+) {
+  if (!value) return false
+
+  try {
+    if (
+      navigator.clipboard
+        ?.writeText
+    ) {
+      await navigator.clipboard.writeText(
+        value,
+      )
+
+      return true
+    }
+  } catch {
+    // fallback below
+  }
+
+  try {
+    const textarea =
+      document.createElement(
+        'textarea',
+      )
+
+    textarea.value = value
+
+    textarea.style.position =
+      'fixed'
+
+    textarea.style.opacity =
+      '0'
+
+    document.body.appendChild(
+      textarea,
+    )
+
+    textarea.focus()
+    textarea.select()
+
+    const ok =
+      document.execCommand(
+        'copy',
+      )
+
+    textarea.remove()
+
+    return ok
+  } catch {
+    return false
+  }
+}
 
 function App() {
-  const [account, setAccount] = useState('')
-  const [busy, setBusy] = useState<Busy>('')
+  const [
+    account,
+    setAccount,
+  ] = useState('')
 
-  const [notice, setNotice] = useState('')
-  const [noticeKind, setNoticeKind] =
-    useState<'info' | 'success' | 'error'>('info')
+  const [
+    busy,
+    setBusy,
+  ] =
+    useState<Busy>('')
 
-  const [campaignId, setCampaignId] =
-    useState('airjudge-v3-final')
+  const [
+    notice,
+    setNotice,
+  ] = useState('')
 
-  const [campaign, setCampaign] =
-    useState<Campaign | null>(null)
+  const [
+    noticeKind,
+    setNoticeKind,
+  ] =
+    useState<
+      | 'info'
+      | 'success'
+      | 'error'
+    >('info')
 
-  const [createId, setCreateId] = useState('')
-  const [createName, setCreateName] = useState('')
-  const [createCriteria, setCreateCriteria] =
-    useState('')
-  const [createReward, setCreateReward] =
-    useState('5')
+  /*
+   * IMPORTANT:
+   * No old hard-coded campaign.
+   * F5 starts with a blank input.
+   */
+  const [
+    campaignId,
+    setCampaignId,
+  ] = useState('')
 
-  const [fundAmount, setFundAmount] =
-    useState('10')
-
-  const [description, setDescription] =
-    useState('')
-  const [proofUrl, setProofUrl] = useState('')
-  const [evidenceUrl, setEvidenceUrl] =
-    useState('')
-
-  const [lookupWallet, setLookupWallet] =
-    useState('')
-  const [application, setApplication] =
-    useState<Application | null>(null)
-
-  const explorerAddress = contractConfigured
-    ? `${EXPLORER_BASE}/address/${CONTRACT_ADDRESS}`
-    : '#'
-
-  const owner = useMemo(() => {
-    if (!account || !campaign?.creator) {
-      return false
-    }
-
-    return (
-      account.toLowerCase() ===
-      campaign.creator.toLowerCase()
+  const [
+    campaign,
+    setCampaign,
+  ] =
+    useState<Campaign | null>(
+      null,
     )
-  }, [account, campaign])
+
+  const [
+    createId,
+    setCreateId,
+  ] = useState('')
+
+  const [
+    createName,
+    setCreateName,
+  ] = useState('')
+
+  const [
+    createCriteria,
+    setCreateCriteria,
+  ] = useState('')
+
+  const [
+    createReward,
+    setCreateReward,
+  ] = useState('5')
+
+  const [
+    fundAmount,
+    setFundAmount,
+  ] = useState('10')
+
+  const [
+    description,
+    setDescription,
+  ] = useState('')
+
+  const [
+    proofUrl,
+    setProofUrl,
+  ] = useState('')
+
+  const [
+    evidenceUrl,
+    setEvidenceUrl,
+  ] = useState('')
+
+  const [
+    lookupWallet,
+    setLookupWallet,
+  ] = useState('')
+
+  const [
+    application,
+    setApplication,
+  ] =
+    useState<Application | null>(
+      null,
+    )
+
+  const explorerAddress =
+    contractConfigured
+      ? `${EXPLORER_BASE}/address/${CONTRACT_ADDRESS}`
+      : '#'
+
+  const owner = useMemo(
+    () => {
+      if (
+        !account ||
+        !campaign?.creator
+      ) {
+        return false
+      }
+
+      return (
+        account.toLowerCase() ===
+        campaign.creator.toLowerCase()
+      )
+    },
+    [
+      account,
+      campaign,
+    ],
+  )
 
   const run = async (
     action: Busy,
     task: () => Promise<void>,
   ) => {
+    if (busy !== '') {
+      return
+    }
+
     try {
       setBusy(action)
       setNotice('')
+
       await task()
     } catch (error) {
-      setNoticeKind('error')
+      setNoticeKind(
+        'error',
+      )
+
       setNotice(
         error instanceof Error
           ? error.message
@@ -137,145 +290,255 @@ function App() {
   }
 
   const connect = () =>
-    run('connect', async () => {
-      if (!contractConfigured) {
-        throw new Error(
-          'Contract address is not configured.',
+    run(
+      'connect',
+      async () => {
+        if (
+          !contractConfigured
+        ) {
+          throw new Error(
+            'Contract address is not configured.',
+          )
+        }
+
+        const address =
+          await connectWallet()
+
+        setAccount(address)
+
+        setLookupWallet(
+          address,
         )
-      }
 
-      const address = await connectWallet()
-
-      setAccount(address)
-      setLookupWallet(address)
-
-      setNoticeKind('success')
-      setNotice(
-        `Wallet connected: ${short(address)}`,
-      )
-    })
-
-  const loadCampaign = useCallback(
-    async (idOverride?: string) => {
-      const id = (
-        idOverride ?? campaignId
-      ).trim()
-
-      if (!id) {
-        throw new Error(
-          'Enter a campaign ID.',
+        setNoticeKind(
+          'success',
         )
-      }
 
-      const [
-        name,
-        criteria,
-        creator,
-        rewardWei,
-        active,
-        pool,
-      ] = await Promise.all([
-        airJudge.getCampaignName(id),
-        airJudge.getCampaignCriteria(id),
-        airJudge.getCampaignCreator(id),
-        airJudge.getCampaignReward(id),
-        airJudge.isCampaignActive(id),
-        airJudge.getCampaignPoolStatus(id),
-      ])
-
-      if (!String(name).trim()) {
-        throw new Error(
-          'Campaign not found.',
+        setNotice(
+          `Wallet connected: ${short(
+            address,
+          )}`,
         )
-      }
-
-      setCampaignId(id)
-
-      setCampaign({
-        id,
-        name: String(name),
-        criteria: String(criteria),
-        creator: String(creator),
-        rewardWei: String(rewardWei),
-        active: Boolean(active),
-        poolWei: pool.pool_wei,
-        reservedWei: pool.reserved_wei,
-        availableWei: pool.available_wei,
-      })
-    },
-    [campaignId],
-  )
-
-  useEffect(() => {
-    if (!contractConfigured) {
-      return
-    }
-
-    void loadCampaign('airjudge-v3-final').catch(
-      () => {
-        // Campaign may not exist on another deployment.
       },
     )
-  }, [])
 
-  const handleLoadCampaign = () =>
-    run('load', async () => {
-      await loadCampaign()
+  const loadCampaign =
+    useCallback(
+      async (
+        idOverride?: string,
+      ) => {
+        const id = (
+          idOverride ??
+          campaignId
+        ).trim()
 
-      setNoticeKind('success')
-      setNotice('Campaign state loaded.')
-    })
+        if (!id) {
+          throw new Error(
+            'Enter a campaign ID.',
+          )
+        }
+
+        const [
+          name,
+          criteria,
+          creator,
+          rewardWei,
+          active,
+          pool,
+        ] =
+          await Promise.all([
+            airJudge.getCampaignName(
+              id,
+            ),
+            airJudge.getCampaignCriteria(
+              id,
+            ),
+            airJudge.getCampaignCreator(
+              id,
+            ),
+            airJudge.getCampaignReward(
+              id,
+            ),
+            airJudge.isCampaignActive(
+              id,
+            ),
+            airJudge.getCampaignPoolStatus(
+              id,
+            ),
+          ])
+
+        if (
+          !String(
+            name,
+          ).trim()
+        ) {
+          throw new Error(
+            'Campaign not found.',
+          )
+        }
+
+        setCampaignId(id)
+
+        setCampaign({
+          id,
+          name: String(name),
+          criteria:
+            String(criteria),
+          creator:
+            String(creator),
+          rewardWei:
+            String(rewardWei),
+          active:
+            Boolean(active),
+          poolWei:
+            pool.pool_wei,
+          reservedWei:
+            pool.reserved_wei,
+          availableWei:
+            pool.available_wei,
+        })
+
+        /*
+         * Prevent data from a
+         * previous campaign
+         * staying visible.
+         */
+        setApplication(
+          null,
+        )
+      },
+      [campaignId],
+    )
+
+  const refreshCampaignAfterWrite =
+    async (
+      id: string,
+    ) => {
+      let lastError:
+        unknown
+
+      for (
+        let i = 0;
+        i < 4;
+        i += 1
+      ) {
+        try {
+          await sleep(
+            i === 0
+              ? 2500
+              : 3000,
+          )
+
+          await loadCampaign(
+            id,
+          )
+
+          return
+        } catch (error) {
+          lastError =
+            error
+        }
+      }
+
+      throw lastError
+    }
+
+  const handleLoadCampaign =
+    () =>
+      run(
+        'load',
+        async () => {
+          await loadCampaign()
+
+          setNoticeKind(
+            'success',
+          )
+
+          setNotice(
+            'Campaign state loaded.',
+          )
+        },
+      )
 
   const createCampaign = (
     event: FormEvent,
   ) => {
     event.preventDefault()
 
-    return run('create', async () => {
-      if (!account) {
-        throw new Error(
-          'Connect wallet first.',
+    return run(
+      'create',
+      async () => {
+        if (!account) {
+          throw new Error(
+            'Connect wallet first.',
+          )
+        }
+
+        if (
+          !createId.trim() ||
+          !createName.trim() ||
+          !createCriteria.trim()
+        ) {
+          throw new Error(
+            'Complete all campaign fields.',
+          )
+        }
+
+        const rewardWei =
+          parseGenToWei(
+            createReward,
+          )
+
+        if (
+          rewardWei <= 0n
+        ) {
+          throw new Error(
+            'Reward must be greater than zero.',
+          )
+        }
+
+        const result =
+          await airJudge.createCampaign(
+            account,
+            createId.trim(),
+            createName.trim(),
+            createCriteria.trim(),
+            rewardWei,
+          )
+
+        setCampaignId(
+          createId.trim(),
         )
-      }
 
-      if (
-        !createId.trim() ||
-        !createName.trim() ||
-        !createCriteria.trim()
-      ) {
-        throw new Error(
-          'Complete all campaign fields.',
+        setNoticeKind(
+          result.monitoringWarning
+            ? 'info'
+            : 'success',
         )
-      }
 
-      const rewardWei =
-        parseGenToWei(createReward)
-
-      if (rewardWei <= 0n) {
-        throw new Error(
-          'Reward must be greater than zero.',
+        setNotice(
+          result.monitoringWarning
+            ? `Transaction ${short(
+                result.hash,
+              )} submitted. RPC receipt monitoring dropped. Verifying onchain state before allowing a retry…`
+            : `Campaign transaction ${short(
+                result.hash,
+              )} accepted. Verifying state…`,
         )
-      }
 
-      await airJudge.createCampaign(
-        account,
-        createId.trim(),
-        createName.trim(),
-        createCriteria.trim(),
-        rewardWei,
-      )
+        await refreshCampaignAfterWrite(
+          createId.trim(),
+        )
 
-      setCampaignId(createId.trim())
+        setNoticeKind(
+          'success',
+        )
 
-      await loadCampaign(
-        createId.trim(),
-      )
-
-      setNoticeKind('success')
-      setNotice(
-        'Campaign created onchain.',
-      )
-    })
+        setNotice(
+          'Campaign created and verified onchain.',
+        )
+      },
+    )
   }
 
   const fundCampaign = (
@@ -283,103 +546,229 @@ function App() {
   ) => {
     event.preventDefault()
 
-    return run('fund', async () => {
-      if (!account) {
-        throw new Error(
-          'Connect wallet first.',
+    return run(
+      'fund',
+      async () => {
+        if (!account) {
+          throw new Error(
+            'Connect wallet first.',
+          )
+        }
+
+        if (!campaign) {
+          throw new Error(
+            'Load a campaign first.',
+          )
+        }
+
+        if (!owner) {
+          throw new Error(
+            'Only the campaign creator can fund it.',
+          )
+        }
+
+        const amountWei =
+          parseGenToWei(
+            fundAmount,
+          )
+
+        if (
+          amountWei <= 0n
+        ) {
+          throw new Error(
+            'Funding amount must be greater than zero.',
+          )
+        }
+
+        const beforePool =
+          BigInt(
+            campaign.poolWei ||
+              '0',
+          )
+
+        const result =
+          await airJudge.fundCampaign(
+            account,
+            campaign.id,
+            amountWei,
+          )
+
+        setNoticeKind(
+          'info',
         )
-      }
 
-      if (!campaign) {
-        throw new Error(
-          'Load a campaign first.',
+        setNotice(
+          result.monitoringWarning
+            ? `Funding transaction ${short(
+                result.hash,
+              )} submitted. RPC monitoring dropped. Checking pool state before retry is allowed…`
+            : `Funding transaction ${short(
+                result.hash,
+              )} accepted. Verifying pool…`,
         )
-      }
 
-      const amountWei =
-        parseGenToWei(fundAmount)
+        let verified =
+          false
 
-      if (amountWei <= 0n) {
-        throw new Error(
-          'Funding amount must be greater than zero.',
+        for (
+          let i = 0;
+          i < 5;
+          i += 1
+        ) {
+          await sleep(
+            i === 0
+              ? 2500
+              : 3000,
+          )
+
+          try {
+            const pool =
+              await airJudge.getCampaignPoolStatus(
+                campaign.id,
+              )
+
+            const nextPool =
+              BigInt(
+                pool.pool_wei ||
+                  '0',
+              )
+
+            if (
+              nextPool >=
+              beforePool +
+                amountWei
+            ) {
+              await loadCampaign(
+                campaign.id,
+              )
+
+              verified =
+                true
+
+              break
+            }
+          } catch {
+            // wait for RPC recovery
+          }
+        }
+
+        if (!verified) {
+          throw new Error(
+            `Transaction ${short(
+              result.hash,
+            )} was submitted, but RPC verification is still unavailable. DO NOT click Fund again. Wait and press LOAD to verify the pool.`,
+          )
+        }
+
+        setNoticeKind(
+          'success',
         )
-      }
 
-      await airJudge.fundCampaign(
-        account,
-        campaign.id,
-        amountWei,
-      )
-
-      await loadCampaign(campaign.id)
-
-      setNoticeKind('success')
-      setNotice(
-        `${fundAmount} GEN added to campaign pool.`,
-      )
-    })
+        setNotice(
+          `${fundAmount} GEN added to campaign pool and verified onchain.`,
+        )
+      },
+    )
   }
 
-  const toggleCampaign = () =>
-    run('toggle', async () => {
-      if (!account || !campaign) {
-        throw new Error(
-          'Connect wallet and load campaign first.',
-        )
-      }
+  const toggleCampaign =
+    () =>
+      run(
+        'toggle',
+        async () => {
+          if (
+            !account ||
+            !campaign
+          ) {
+            throw new Error(
+              'Connect wallet and load campaign first.',
+            )
+          }
 
-      if (!owner) {
-        throw new Error(
-          'Only the campaign creator can change campaign state.',
-        )
-      }
+          if (!owner) {
+            throw new Error(
+              'Only the campaign creator can change campaign state.',
+            )
+          }
 
-      await airJudge.setCampaignActive(
-        account,
-        campaign.id,
-        !campaign.active,
+          await airJudge.setCampaignActive(
+            account,
+            campaign.id,
+            !campaign.active,
+          )
+
+          await refreshCampaignAfterWrite(
+            campaign.id,
+          )
+
+          setNoticeKind(
+            'success',
+          )
+
+          setNotice(
+            campaign.active
+              ? 'Campaign paused.'
+              : 'Campaign activated.',
+          )
+        },
       )
-
-      await loadCampaign(campaign.id)
-
-      setNoticeKind('success')
-      setNotice(
-        campaign.active
-          ? 'Campaign paused.'
-          : 'Campaign activated.',
-      )
-    })
 
   const requiredMarker =
-    useMemo(() => {
-      if (!campaign || !account) {
-        return ''
-      }
+    useMemo(
+      () => {
+        if (
+          !campaign ||
+          !account
+        ) {
+          return ''
+        }
 
-      return `AIRJUDGE_PROOF:${campaign.id}:${account.toLowerCase()}`
-    }, [campaign, account])
+        return `AIRJUDGE_PROOF:${campaign.id}:${account.toLowerCase()}`
+      },
+      [
+        campaign,
+        account,
+      ],
+    )
 
-  const loadRequiredMarker =
+  const copyMarker =
     async () => {
-      if (!campaign || !account) {
+      if (
+        !requiredMarker
+      ) {
+        setNoticeKind(
+          'error',
+        )
+
+        setNotice(
+          'Connect wallet and load campaign first.',
+        )
+
         return
       }
 
-      try {
-        const marker =
-          await airJudge.getRequiredProofMarker(
-            campaign.id,
-            account,
-          )
+      const copied =
+        await copyText(
+          requiredMarker,
+        )
 
-        if (marker) {
-          return String(marker)
-        }
-      } catch {
-        // UI fallback below matches contract marker format.
+      if (copied) {
+        setNoticeKind(
+          'success',
+        )
+
+        setNotice(
+          'Proof marker copied.',
+        )
+      } else {
+        setNoticeKind(
+          'info',
+        )
+
+        setNotice(
+          'Browser blocked clipboard access. Select the marker and copy it manually.',
+        )
       }
-
-      return requiredMarker
     }
 
   const submitApplication = (
@@ -387,298 +776,429 @@ function App() {
   ) => {
     event.preventDefault()
 
-    return run('submit', async () => {
-      if (!account) {
-        throw new Error(
-          'Connect wallet first.',
-        )
-      }
+    return run(
+      'submit',
+      async () => {
+        if (!account) {
+          throw new Error(
+            'Connect wallet first.',
+          )
+        }
 
+        if (!campaign) {
+          throw new Error(
+            'Load a campaign first.',
+          )
+        }
+
+        if (owner) {
+          throw new Error(
+            'Campaign creator cannot apply.',
+          )
+        }
+
+        if (
+          !campaign.active
+        ) {
+          throw new Error(
+            'Campaign is not active.',
+          )
+        }
+
+        if (
+          description
+            .trim()
+            .length < 10
+        ) {
+          throw new Error(
+            'Add a meaningful contribution description.',
+          )
+        }
+
+        if (
+          !proofUrl.startsWith(
+            'https://',
+          )
+        ) {
+          throw new Error(
+            'Proof URL must be a public HTTPS URL.',
+          )
+        }
+
+        if (
+          !evidenceUrl.startsWith(
+            'https://',
+          )
+        ) {
+          throw new Error(
+            'Evidence URL must be a public HTTPS URL.',
+          )
+        }
+
+        const used =
+          await airJudge.isEvidenceUsed(
+            campaign.id,
+            evidenceUrl,
+          )
+
+        if (used) {
+          throw new Error(
+            'This evidence URL has already been used in this campaign.',
+          )
+        }
+
+        const result =
+          await airJudge.submitApplication(
+            account,
+            campaign.id,
+            description.trim(),
+            proofUrl.trim(),
+            evidenceUrl.trim(),
+          )
+
+        setLookupWallet(
+          account,
+        )
+
+        setNoticeKind(
+          result.monitoringWarning
+            ? 'info'
+            : 'success',
+        )
+
+        setNotice(
+          result.monitoringWarning
+            ? `Application transaction ${short(
+                result.hash,
+              )} submitted. Waiting for accepted state. Do not submit again.`
+            : `Application transaction ${short(
+                result.hash,
+              )} accepted. Loading state…`,
+        )
+
+        await sleep(3500)
+
+        await loadApplication(
+          account,
+        )
+
+        setNoticeKind(
+          'success',
+        )
+
+        setNotice(
+          'Application submitted. Status is PENDING and ready for adjudication.',
+        )
+      },
+    )
+  }
+
+  const loadApplication =
+    async (
+      walletOverride?: string,
+    ) => {
       if (!campaign) {
         throw new Error(
           'Load a campaign first.',
         )
       }
 
-      if (!campaign.active) {
+      const wallet = (
+        walletOverride ??
+        lookupWallet
+      ).trim()
+
+      if (!wallet) {
         throw new Error(
-          'Campaign is not active.',
+          'Enter applicant wallet.',
         )
       }
+
+      const applicant =
+        normalizeAddress(
+          wallet,
+        )
+
+      const [
+        status,
+        applicationDescription,
+        applicationProofUrl,
+        applicationEvidence,
+        reason,
+        reviewedSnapshot,
+        pendingWei,
+      ] =
+        await Promise.all([
+          airJudge.getApplicationStatus(
+            campaign.id,
+            applicant,
+          ),
+
+          airJudge.getApplicationDescription(
+            campaign.id,
+            applicant,
+          ),
+
+          airJudge.getApplicationProofUrl(
+            campaign.id,
+            applicant,
+          ),
+
+          airJudge.getApplicationEvidence(
+            campaign.id,
+            applicant,
+          ),
+
+          airJudge.getApplicationReason(
+            campaign.id,
+            applicant,
+          ),
+
+          airJudge.getReviewedSnapshot(
+            campaign.id,
+            applicant,
+          ),
+
+          airJudge.getPendingPayout(
+            campaign.id,
+            applicant,
+          ),
+        ])
 
       if (
-        description.trim().length < 10
+        !String(
+          status,
+        ).trim()
       ) {
         throw new Error(
-          'Add a meaningful contribution description.',
+          'No application found for this wallet.',
         )
       }
 
-      if (
-        !proofUrl.startsWith('https://')
-      ) {
-        throw new Error(
-          'Proof URL must be a public HTTPS URL.',
-        )
-      }
-
-      if (
-        !evidenceUrl.startsWith('https://')
-      ) {
-        throw new Error(
-          'Evidence URL must be a public HTTPS URL.',
-        )
-      }
-
-      const used =
-        await airJudge.isEvidenceUsed(
-          campaign.id,
-          evidenceUrl,
-        )
-
-      if (used) {
-        throw new Error(
-          'This evidence URL has already been used in this campaign.',
-        )
-      }
-
-      await airJudge.submitApplication(
-        account,
-        campaign.id,
-        description.trim(),
-        proofUrl.trim(),
-        evidenceUrl.trim(),
+      setLookupWallet(
+        applicant,
       )
 
-      setLookupWallet(account)
-
-      await loadApplication(account)
-
-      setNoticeKind('success')
-      setNotice(
-        'Application submitted. Ready for GenLayer adjudication.',
-      )
-    })
-  }
-
-  const loadApplication = async (
-    walletOverride?: string,
-  ) => {
-    if (!campaign) {
-      throw new Error(
-        'Load a campaign first.',
-      )
+      setApplication({
+        applicant,
+        status:
+          String(status),
+        description:
+          String(
+            applicationDescription,
+          ),
+        proofUrl:
+          String(
+            applicationProofUrl,
+          ),
+        evidenceUrl:
+          String(
+            applicationEvidence,
+          ),
+        reason:
+          String(reason),
+        reviewedSnapshot:
+          String(
+            reviewedSnapshot,
+          ),
+        pendingWei:
+          String(
+            pendingWei,
+          ),
+      })
     }
 
-    const wallet = (
-      walletOverride ??
-      lookupWallet
-    ).trim()
+  const handleLoadApplication =
+    () =>
+      run(
+        'load',
+        async () => {
+          await loadApplication()
 
-    if (!wallet) {
-      throw new Error(
-        'Enter applicant wallet.',
-      )
-    }
+          setNoticeKind(
+            'success',
+          )
 
-    const applicant =
-      normalizeAddress(wallet)
-
-    const [
-      status,
-      applicationDescription,
-      applicationProofUrl,
-      applicationEvidence,
-      reason,
-      reviewedSnapshot,
-      pendingWei,
-    ] = await Promise.all([
-      airJudge.getApplicationStatus(
-        campaign.id,
-        applicant,
-      ),
-      airJudge.getApplicationDescription(
-        campaign.id,
-        applicant,
-      ),
-      airJudge.getApplicationProofUrl(
-        campaign.id,
-        applicant,
-      ),
-      airJudge.getApplicationEvidence(
-        campaign.id,
-        applicant,
-      ),
-      airJudge.getApplicationReason(
-        campaign.id,
-        applicant,
-      ),
-      airJudge.getReviewedSnapshot(
-        campaign.id,
-        applicant,
-      ),
-      airJudge.getPendingPayout(
-        campaign.id,
-        applicant,
-      ),
-    ])
-
-    if (!String(status).trim()) {
-      throw new Error(
-        'No application found for this wallet.',
-      )
-    }
-
-    setLookupWallet(applicant)
-
-    setApplication({
-      applicant,
-      status: String(status),
-      description:
-        String(applicationDescription),
-      proofUrl:
-        String(applicationProofUrl),
-      evidenceUrl:
-        String(applicationEvidence),
-      reason: String(reason),
-      reviewedSnapshot:
-        String(reviewedSnapshot),
-      pendingWei:
-        String(pendingWei),
-    })
-  }
-
-  const handleLoadApplication = () =>
-    run('load', async () => {
-      await loadApplication()
-
-      setNoticeKind('success')
-      setNotice(
-        'Application loaded.',
-      )
-    })
-
-  const judgeApplication = () =>
-    run('judge', async () => {
-      if (
-        !account ||
-        !campaign ||
-        !application
-      ) {
-        throw new Error(
-          'Load an application first.',
-        )
-      }
-
-      const { hash } =
-        await airJudge.judgeApplication(
-          account,
-          campaign.id,
-          application.applicant,
-        )
-
-      setNoticeKind('info')
-      setNotice(
-        `Adjudication submitted (${short(
-          String(hash),
-        )}). Waiting for validator consensus...`,
+          setNotice(
+            'Application loaded.',
+          )
+        },
       )
 
-      const status =
-        await pollApplicationStatus(
-          campaign.id,
-          application.applicant,
-        )
+  const judgeApplication =
+    () =>
+      run(
+        'judge',
+        async () => {
+          if (
+            !account ||
+            !campaign ||
+            !application
+          ) {
+            throw new Error(
+              'Load an application first.',
+            )
+          }
 
-      await loadApplication(
-        application.applicant,
-      )
+          if (
+            application.status !==
+            'PENDING'
+          ) {
+            throw new Error(
+              'This application has already been adjudicated.',
+            )
+          }
 
-      await loadCampaign(
-        campaign.id,
-      )
+          const { hash } =
+            await airJudge.judgeApplication(
+              account,
+              campaign.id,
+              application.applicant,
+            )
 
-      setNoticeKind('success')
-      setNotice(
-        `Consensus reached: ${status}`,
+          setNoticeKind(
+            'info',
+          )
+
+          setNotice(
+            `Adjudication ${short(
+              hash,
+            )} submitted. Validators are reaching consensus. Do not click Run again.`,
+          )
+
+          /*
+           * Avoid immediate polling.
+           * Give accepted state time to appear.
+           */
+          await sleep(7000)
+
+          const status =
+            await pollApplicationStatus(
+              campaign.id,
+              application.applicant,
+            )
+
+          await loadApplication(
+            application.applicant,
+          )
+
+          try {
+            await loadCampaign(
+              campaign.id,
+            )
+          } catch {
+            // transient RPC campaign refresh is non-fatal
+          }
+
+          if (
+            status ===
+            'PENDING'
+          ) {
+            setNoticeKind(
+              'info',
+            )
+
+            setNotice(
+              `Adjudication ${short(
+                hash,
+              )} was submitted, but RPC polling timed out. DO NOT run it again. Use LOAD APPLICATION to refresh the final status.`,
+            )
+
+            return
+          }
+
+          setNoticeKind(
+            'success',
+          )
+
+          setNotice(
+            `Consensus reached: ${status}`,
+          )
+        },
       )
-    })
 
   const withdraw = () =>
-    run('withdraw', async () => {
-      if (
-        !account ||
-        !campaign ||
-        !application
-      ) {
-        throw new Error(
-          'Connect the applicant wallet first.',
+    run(
+      'withdraw',
+      async () => {
+        if (
+          !account ||
+          !campaign ||
+          !application
+        ) {
+          throw new Error(
+            'Connect the applicant wallet first.',
+          )
+        }
+
+        if (
+          account.toLowerCase() !==
+          application.applicant.toLowerCase()
+        ) {
+          throw new Error(
+            'Connect the applicant wallet that owns this payout.',
+          )
+        }
+
+        if (
+          BigInt(
+            application.pendingWei ||
+              '0',
+          ) <= 0n
+        ) {
+          throw new Error(
+            'No reserved payout is available.',
+          )
+        }
+
+        const result =
+          await airJudge.withdraw(
+            account,
+            campaign.id,
+          )
+
+        setNoticeKind(
+          result.monitoringWarning
+            ? 'info'
+            : 'success',
         )
-      }
 
-      if (
-        account.toLowerCase() !==
-        application.applicant.toLowerCase()
-      ) {
-        throw new Error(
-          'Connect the applicant wallet that owns this payout.',
+        setNotice(
+          result.monitoringWarning
+            ? `Withdrawal ${short(
+                result.hash,
+              )} submitted. Verifying final payout state. Do not click Claim again.`
+            : `Withdrawal ${short(
+                result.hash,
+              )} accepted. Verifying payout…`,
         )
-      }
 
-      if (
-        BigInt(
-          application.pendingWei || '0',
-        ) <= 0n
-      ) {
-        throw new Error(
-          'No reserved payout is available.',
+        await sleep(3500)
+
+        await loadApplication(
+          application.applicant,
         )
-      }
 
-      await airJudge.withdraw(
-        account,
-        campaign.id,
-      )
+        await loadCampaign(
+          campaign.id,
+        )
 
-      await loadApplication(
-        application.applicant,
-      )
+        setNoticeKind(
+          'success',
+        )
 
-      await loadCampaign(
-        campaign.id,
-      )
-
-      setNoticeKind('success')
-      setNotice(
-        'Reward withdrawn successfully.',
-      )
-    })
-
-  const copyMarker = async () => {
-    const marker =
-      await loadRequiredMarker()
-
-    if (!marker) {
-      setNoticeKind('error')
-      setNotice(
-        'Connect wallet and load campaign first.',
-      )
-      return
-    }
-
-    await navigator.clipboard.writeText(
-      marker,
+        setNotice(
+          'Reward withdrawal verified onchain.',
+        )
+      },
     )
 
-    setNoticeKind('success')
-    setNotice(
-      'Proof marker copied.',
-    )
-  }
-
-  const pendingGen = application
-    ? formatWei(application.pendingWei)
-    : '0'
+  const pendingGen =
+    application
+      ? formatWei(
+          application.pendingWei,
+        )
+      : '0'
 
   return (
     <div className="app">
@@ -689,7 +1209,10 @@ function App() {
           </div>
 
           <div>
-            <strong>AirJudge</strong>
+            <strong>
+              AirJudge
+            </strong>
+
             <span>
               GenLayer contribution adjudication
             </span>
@@ -698,7 +1221,9 @@ function App() {
 
         <div className="top-actions">
           <a
-            href={explorerAddress}
+            href={
+              explorerAddress
+            }
             target={
               contractConfigured
                 ? '_blank'
@@ -712,7 +1237,10 @@ function App() {
           <WalletButton
             account={account}
             onConnect={connect}
-            busy={busy === 'connect'}
+            busy={
+              busy ===
+              'connect'
+            }
           />
         </div>
       </header>
@@ -726,19 +1254,16 @@ function App() {
           <h1>
             Prove contribution.
             <br />
+
             <em>
               Let consensus decide.
             </em>
           </h1>
 
           <p>
-            Campaign creators define
-            qualitative eligibility criteria
-            and fund rewards. Applicants
-            provide public proof and evidence.
-            GenLayer validators adjudicate the
-            contribution before funds can be
-            claimed.
+            Campaign creators define qualitative eligibility criteria and fund rewards.
+            Applicants provide public proof and evidence.
+            GenLayer validators adjudicate the contribution before funds can be claimed.
           </p>
         </section>
 
@@ -762,6 +1287,7 @@ function App() {
               <span className="step">
                 01 / CAMPAIGN
               </span>
+
               <h2>
                 Load campaign
               </h2>
@@ -781,95 +1307,124 @@ function App() {
           <div className="inline-form">
             <input
               value={campaignId}
-              onChange={(event) =>
+              onChange={(
+                event,
+              ) =>
                 setCampaignId(
-                  event.target.value,
+                  event.target
+                    .value,
                 )
               }
-              placeholder="campaign-id"
+              placeholder="Enter campaign ID"
             />
 
             <button
               onClick={
                 handleLoadCampaign
               }
-              disabled={busy !== ''}
+              disabled={
+                busy !== ''
+              }
             >
-              {busy === 'load'
+              {busy ===
+              'load'
                 ? 'LOADING…'
                 : 'LOAD'}
             </button>
           </div>
 
           {campaign && (
-            <div className="campaign-grid">
-              <div>
-                <span>CAMPAIGN</span>
-                <strong>
-                  {campaign.name}
-                </strong>
+            <>
+              <div className="campaign-grid">
+                <div>
+                  <span>
+                    CAMPAIGN
+                  </span>
+
+                  <strong>
+                    {
+                      campaign.name
+                    }
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    REWARD
+                  </span>
+
+                  <strong>
+                    {formatWei(
+                      campaign.rewardWei,
+                    )}{' '}
+                    GEN
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    POOL
+                  </span>
+
+                  <strong>
+                    {formatWei(
+                      campaign.poolWei,
+                    )}{' '}
+                    GEN
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    RESERVED
+                  </span>
+
+                  <strong>
+                    {formatWei(
+                      campaign.reservedWei,
+                    )}{' '}
+                    GEN
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    AVAILABLE
+                  </span>
+
+                  <strong>
+                    {formatWei(
+                      campaign.availableWei,
+                    )}{' '}
+                    GEN
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    CREATOR
+                  </span>
+
+                  <strong>
+                    {short(
+                      campaign.creator,
+                    )}
+                  </strong>
+                </div>
               </div>
 
-              <div>
-                <span>REWARD</span>
-                <strong>
-                  {formatWei(
-                    campaign.rewardWei,
-                  )}{' '}
-                  GEN
-                </strong>
-              </div>
+              <div className="criteria-box">
+                <span>
+                  ELIGIBILITY CRITERIA
+                </span>
 
-              <div>
-                <span>POOL</span>
-                <strong>
-                  {formatWei(
-                    campaign.poolWei,
-                  )}{' '}
-                  GEN
-                </strong>
+                <p>
+                  {
+                    campaign.criteria
+                  }
+                </p>
               </div>
-
-              <div>
-                <span>RESERVED</span>
-                <strong>
-                  {formatWei(
-                    campaign.reservedWei,
-                  )}{' '}
-                  GEN
-                </strong>
-              </div>
-
-              <div>
-                <span>AVAILABLE</span>
-                <strong>
-                  {formatWei(
-                    campaign.availableWei,
-                  )}{' '}
-                  GEN
-                </strong>
-              </div>
-
-              <div>
-                <span>CREATOR</span>
-                <strong>
-                  {short(
-                    campaign.creator,
-                  )}
-                </strong>
-              </div>
-            </div>
-          )}
-
-          {campaign && (
-            <div className="criteria-box">
-              <span>
-                ELIGIBILITY CRITERIA
-              </span>
-              <p>
-                {campaign.criteria}
-              </p>
-            </div>
+            </>
           )}
         </section>
 
@@ -879,6 +1434,7 @@ function App() {
               <span className="step">
                 02 / CREATE
               </span>
+
               <h2>
                 Create reward campaign
               </h2>
@@ -886,16 +1442,26 @@ function App() {
           </div>
 
           <form
-            onSubmit={createCampaign}
+            onSubmit={
+              createCampaign
+            }
             className="form-grid"
           >
             <label>
-              <span>CAMPAIGN ID</span>
+              <span>
+                CAMPAIGN ID
+              </span>
+
               <input
-                value={createId}
-                onChange={(event) =>
+                value={
+                  createId
+                }
+                onChange={(
+                  event,
+                ) =>
                   setCreateId(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 placeholder="genlayer-builders"
@@ -903,12 +1469,20 @@ function App() {
             </label>
 
             <label>
-              <span>CAMPAIGN NAME</span>
+              <span>
+                CAMPAIGN NAME
+              </span>
+
               <input
-                value={createName}
-                onChange={(event) =>
+                value={
+                  createName
+                }
+                onChange={(
+                  event,
+                ) =>
                   setCreateName(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 placeholder="GenLayer Builders"
@@ -916,12 +1490,20 @@ function App() {
             </label>
 
             <label>
-              <span>REWARD / GEN</span>
+              <span>
+                REWARD / GEN
+              </span>
+
               <input
-                value={createReward}
-                onChange={(event) =>
+                value={
+                  createReward
+                }
+                onChange={(
+                  event,
+                ) =>
                   setCreateReward(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
               />
@@ -931,12 +1513,18 @@ function App() {
               <span>
                 ELIGIBILITY CRITERIA
               </span>
+
               <textarea
                 rows={4}
-                value={createCriteria}
-                onChange={(event) =>
+                value={
+                  createCriteria
+                }
+                onChange={(
+                  event,
+                ) =>
                   setCreateCriteria(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 placeholder="Applicant must provide verifiable evidence of..."
@@ -950,8 +1538,9 @@ function App() {
                 !account
               }
             >
-              {busy === 'create'
-                ? 'CREATING…'
+              {busy ===
+              'create'
+                ? 'CREATING / VERIFYING…'
                 : 'CREATE CAMPAIGN'}
             </button>
           </form>
@@ -964,6 +1553,7 @@ function App() {
                 <span className="step">
                   03 / FUND
                 </span>
+
                 <h2>
                   Campaign reward pool
                 </h2>
@@ -971,14 +1561,21 @@ function App() {
             </div>
 
             <form
-              onSubmit={fundCampaign}
+              onSubmit={
+                fundCampaign
+              }
               className="inline-form"
             >
               <input
-                value={fundAmount}
-                onChange={(event) =>
+                value={
+                  fundAmount
+                }
+                onChange={(
+                  event,
+                ) =>
                   setFundAmount(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 placeholder="GEN amount"
@@ -988,11 +1585,13 @@ function App() {
                 type="submit"
                 disabled={
                   busy !== '' ||
-                  !account
+                  !account ||
+                  !owner
                 }
               >
-                {busy === 'fund'
-                  ? 'FUNDING…'
+                {busy ===
+                'fund'
+                  ? 'FUNDING / VERIFYING…'
                   : 'FUND CAMPAIGN'}
               </button>
             </form>
@@ -1000,8 +1599,12 @@ function App() {
             {owner && (
               <button
                 className="secondary"
-                onClick={toggleCampaign}
-                disabled={busy !== ''}
+                onClick={
+                  toggleCampaign
+                }
+                disabled={
+                  busy !== ''
+                }
               >
                 {campaign.active
                   ? 'PAUSE CAMPAIGN'
@@ -1018,6 +1621,7 @@ function App() {
                 <span className="step">
                   04 / PROOF
                 </span>
+
                 <h2>
                   Submit contribution
                 </h2>
@@ -1031,17 +1635,28 @@ function App() {
 
               <code>
                 {requiredMarker ||
-                  'Connect wallet to generate marker'}
+                  'Connect applicant wallet to generate marker'}
               </code>
 
               <button
                 type="button"
-                onClick={copyMarker}
-                disabled={!account}
+                onClick={
+                  copyMarker
+                }
+                disabled={
+                  !account
+                }
               >
                 COPY MARKER
               </button>
             </div>
+
+            {owner && (
+              <div className="notice info">
+                Campaign creator cannot submit an application.
+                Switch to an applicant wallet.
+              </div>
+            )}
 
             <form
               onSubmit={
@@ -1053,15 +1668,21 @@ function App() {
                 <span>
                   CONTRIBUTION DESCRIPTION
                 </span>
+
                 <textarea
                   rows={5}
-                  value={description}
-                  onChange={(event) =>
+                  value={
+                    description
+                  }
+                  onChange={(
+                    event,
+                  ) =>
                     setDescription(
-                      event.target.value,
+                      event.target
+                        .value,
                     )
                   }
-                  placeholder="Describe what you created and why it satisfies the campaign criteria..."
+                  placeholder="Describe the concrete implemented work..."
                 />
               </label>
 
@@ -1069,11 +1690,17 @@ function App() {
                 <span>
                   AUTHORSHIP / PROOF URL
                 </span>
+
                 <input
-                  value={proofUrl}
-                  onChange={(event) =>
+                  value={
+                    proofUrl
+                  }
+                  onChange={(
+                    event,
+                  ) =>
                     setProofUrl(
-                      event.target.value,
+                      event.target
+                        .value,
                     )
                   }
                   placeholder="https://..."
@@ -1084,11 +1711,17 @@ function App() {
                 <span>
                   CONTRIBUTION EVIDENCE URL
                 </span>
+
                 <input
-                  value={evidenceUrl}
-                  onChange={(event) =>
+                  value={
+                    evidenceUrl
+                  }
+                  onChange={(
+                    event,
+                  ) =>
                     setEvidenceUrl(
-                      event.target.value,
+                      event.target
+                        .value,
                     )
                   }
                   placeholder="https://..."
@@ -1100,11 +1733,13 @@ function App() {
                 disabled={
                   busy !== '' ||
                   !account ||
+                  owner ||
                   !campaign.active
                 }
               >
-                {busy === 'submit'
-                  ? 'SUBMITTING…'
+                {busy ===
+                'submit'
+                  ? 'SUBMITTING / VERIFYING…'
                   : 'SUBMIT EVIDENCE'}
               </button>
             </form>
@@ -1118,6 +1753,7 @@ function App() {
                 <span className="step">
                   05 / ADJUDICATION
                 </span>
+
                 <h2>
                   AI review & settlement
                 </h2>
@@ -1126,10 +1762,15 @@ function App() {
 
             <div className="inline-form">
               <input
-                value={lookupWallet}
-                onChange={(event) =>
+                value={
+                  lookupWallet
+                }
+                onChange={(
+                  event,
+                ) =>
                   setLookupWallet(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 placeholder="0x applicant wallet"
@@ -1139,7 +1780,9 @@ function App() {
                 onClick={
                   handleLoadApplication
                 }
-                disabled={busy !== ''}
+                disabled={
+                  busy !== ''
+                }
               >
                 LOAD APPLICATION
               </button>
@@ -1152,6 +1795,7 @@ function App() {
                     <span>
                       APPLICANT
                     </span>
+
                     <strong>
                       {short(
                         application.applicant,
@@ -1173,6 +1817,7 @@ function App() {
                     <span>
                       DESCRIPTION
                     </span>
+
                     <p>
                       {
                         application.description
@@ -1184,6 +1829,7 @@ function App() {
                     <span>
                       PROOF
                     </span>
+
                     <a
                       href={
                         application.proofUrl
@@ -1201,6 +1847,7 @@ function App() {
                     <span>
                       EVIDENCE
                     </span>
+
                     <a
                       href={
                         application.evidenceUrl
@@ -1220,6 +1867,7 @@ function App() {
                     <span>
                       CONSENSUS REASON
                     </span>
+
                     <p>
                       {
                         application.reason
@@ -1233,6 +1881,7 @@ function App() {
                     <span>
                       REVIEWED SNAPSHOT
                     </span>
+
                     <p>
                       {
                         application.reviewedSnapshot
@@ -1246,8 +1895,10 @@ function App() {
                     <span>
                       RESERVED / CLAIMABLE
                     </span>
+
                     <strong>
-                      {pendingGen} GEN
+                      {pendingGen}{' '}
+                      GEN
                     </strong>
                   </div>
 
@@ -1261,7 +1912,8 @@ function App() {
                         busy !== ''
                       }
                     >
-                      {busy === 'judge'
+                      {busy ===
+                      'judge'
                         ? 'VALIDATORS RUNNING…'
                         : 'RUN GENLAYER ADJUDICATION'}
                     </button>
@@ -1270,9 +1922,12 @@ function App() {
                   {BigInt(
                     application.pendingWei ||
                       '0',
-                  ) > 0n && (
+                  ) >
+                    0n && (
                     <button
-                      onClick={withdraw}
+                      onClick={
+                        withdraw
+                      }
                       disabled={
                         busy !== '' ||
                         account.toLowerCase() !==
@@ -1281,7 +1936,7 @@ function App() {
                     >
                       {busy ===
                       'withdraw'
-                        ? 'CLAIMING…'
+                        ? 'CLAIMING / VERIFYING…'
                         : `CLAIM ${pendingGen} GEN`}
                     </button>
                   )}
