@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useState,
 } from 'react'
@@ -18,6 +19,7 @@ import {
 import {
   airJudge,
   connectWallet,
+  getConnectedWallet,
   formatWei,
   normalizeAddress,
   parseGenToWei,
@@ -164,6 +166,38 @@ function App() {
       | 'success'
       | 'error'
     >('info')
+
+  /*
+   * Restore a wallet that has already authorized this site.
+   * eth_accounts does not open a wallet popup.
+   */
+  useEffect(() => {
+    let cancelled = false
+
+    const restore = async () => {
+      try {
+        const address =
+          await getConnectedWallet()
+
+        if (
+          !cancelled &&
+          address
+        ) {
+          setAccount(address)
+          setLookupWallet(address)
+        }
+      } catch {
+        // Wallet restore is best-effort.
+        // Manual CONNECT remains available.
+      }
+    }
+
+    void restore()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   /*
    * IMPORTANT:
@@ -771,6 +805,40 @@ function App() {
       }
     }
 
+  const refreshApplicationAfterWrite =
+    async (
+      applicant: string,
+      attempts = 5,
+    ) => {
+      let lastError:
+        unknown
+
+      for (
+        let i = 0;
+        i < attempts;
+        i += 1
+      ) {
+        try {
+          await sleep(
+            i === 0
+              ? 3000
+              : 3000,
+          )
+
+          await loadApplication(
+            applicant,
+          )
+
+          return
+        } catch (error) {
+          lastError =
+            error
+        }
+      }
+
+      throw lastError
+    }
+
   const submitApplication = (
     event: FormEvent,
   ) => {
@@ -805,10 +873,17 @@ function App() {
           )
         }
 
+        const cleanDescription =
+          description.trim()
+
+        const cleanProofUrl =
+          proofUrl.trim()
+
+        const cleanEvidenceUrl =
+          evidenceUrl.trim()
+
         if (
-          description
-            .trim()
-            .length < 10
+          cleanDescription.length < 10
         ) {
           throw new Error(
             'Add a meaningful contribution description.',
@@ -816,7 +891,7 @@ function App() {
         }
 
         if (
-          !proofUrl.startsWith(
+          !cleanProofUrl.startsWith(
             'https://',
           )
         ) {
@@ -826,7 +901,7 @@ function App() {
         }
 
         if (
-          !evidenceUrl.startsWith(
+          !cleanEvidenceUrl.startsWith(
             'https://',
           )
         ) {
@@ -838,7 +913,7 @@ function App() {
         const used =
           await airJudge.isEvidenceUsed(
             campaign.id,
-            evidenceUrl,
+            cleanEvidenceUrl,
           )
 
         if (used) {
@@ -851,9 +926,9 @@ function App() {
           await airJudge.submitApplication(
             account,
             campaign.id,
-            description.trim(),
-            proofUrl.trim(),
-            evidenceUrl.trim(),
+            cleanDescription,
+            cleanProofUrl,
+            cleanEvidenceUrl,
           )
 
         setLookupWallet(
@@ -876,9 +951,7 @@ function App() {
               )} accepted. Loading state…`,
         )
 
-        await sleep(3500)
-
-        await loadApplication(
+        await refreshApplicationAfterWrite(
           account,
         )
 
@@ -1173,13 +1246,11 @@ function App() {
               )} accepted. Verifying payout…`,
         )
 
-        await sleep(3500)
-
-        await loadApplication(
+        await refreshApplicationAfterWrite(
           application.applicant,
         )
 
-        await loadCampaign(
+        await refreshCampaignAfterWrite(
           campaign.id,
         )
 
