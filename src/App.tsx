@@ -1759,7 +1759,7 @@ function App() {
 
               <label className="wide">
                 <span>
-                  AUTHORSHIP / PROOF URL
+                  PROOF / BINDING URL
                 </span>
 
                 <input
