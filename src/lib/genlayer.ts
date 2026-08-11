@@ -4,12 +4,6 @@ import { TransactionStatus } from 'genlayer-js/types'
 import { getAddress } from 'viem'
 import { CONTRACT_ADDRESS, STUDIO_RPC } from './config'
 
-declare global {
-  interface Window {
-    ethereum?: any
-  }
-}
-
 const chain = {
   ...studionet,
   rpcUrls: {
@@ -17,27 +11,58 @@ const chain = {
   },
 }
 
-export const normalizeAddress = (address: string) => getAddress(address)
+export const normalizeAddress = (address: string) =>
+  getAddress(address)
 
-export const formatWei = (value?: string | bigint | number) => {
+export const formatWei = (
+  value?: string | bigint | number,
+) => {
   const wei = BigInt(value ?? 0)
+
   const whole = wei / 10n ** 18n
   const fraction = wei % 10n ** 18n
-  if (fraction === 0n) return whole.toString()
-  return `${whole}.${fraction.toString().padStart(18, '0').replace(/0+$/, '')}`
+
+  if (fraction === 0n) {
+    return whole.toString()
+  }
+
+  return `${whole}.${fraction
+    .toString()
+    .padStart(18, '0')
+    .replace(/0+$/, '')}`
 }
 
 export const parseGenToWei = (value: string) => {
   const clean = value.trim()
-  if (!/^\d+(\.\d{0,18})?$/.test(clean)) throw new Error('Enter a valid GEN amount.')
+
+  if (!/^\d+(\.\d{0,18})?$/.test(clean)) {
+    throw new Error('Enter a valid GEN amount.')
+  }
+
   const [whole, fraction = ''] = clean.split('.')
-  return BigInt(whole || '0') * 10n ** 18n +
-    BigInt((fraction + '0'.repeat(18)).slice(0, 18))
+
+  return (
+    BigInt(whole || '0') * 10n ** 18n +
+    BigInt(
+      (fraction + '0'.repeat(18)).slice(0, 18),
+    )
+  )
+}
+
+const getEthereumProvider = () => {
+  if (typeof window === 'undefined') {
+    return undefined
+  }
+
+  return (window as any).ethereum
 }
 
 export const getClient = (account?: string) => {
-  const provider = typeof window !== 'undefined' ? window.ethereum : undefined
-  const checksummed = account ? normalizeAddress(account) : undefined
+  const provider = getEthereumProvider()
+
+  const checksummed = account
+    ? normalizeAddress(account)
+    : undefined
 
   return createClient({
     chain,
@@ -47,19 +72,29 @@ export const getClient = (account?: string) => {
 }
 
 export async function connectWallet(): Promise<string> {
-  if (!window.ethereum) {
-    throw new Error('No browser wallet detected. Install MetaMask or a compatible wallet.')
+  const ethereum = getEthereumProvider()
+
+  if (!ethereum) {
+    throw new Error(
+      'No browser wallet detected. Install MetaMask or a compatible wallet.',
+    )
   }
 
-  const accounts = (await window.ethereum.request({
+  const accounts = (await ethereum.request({
     method: 'eth_requestAccounts',
   })) as string[]
 
-  if (!accounts?.[0]) throw new Error('Wallet connection was not approved.')
+  if (!accounts?.[0]) {
+    throw new Error(
+      'Wallet connection was not approved.',
+    )
+  }
+
   return normalizeAddress(accounts[0])
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms))
 
 async function write(
   account: string,
@@ -76,12 +111,16 @@ async function write(
     value,
   } as any)
 
-  const receipt = await client.waitForTransactionReceipt({
-    hash,
-    status: TransactionStatus.ACCEPTED,
-  })
+  const receipt =
+    await client.waitForTransactionReceipt({
+      hash,
+      status: TransactionStatus.ACCEPTED,
+    })
 
-  return { hash, receipt }
+  return {
+    hash,
+    receipt,
+  }
 }
 
 async function writeAsync(
@@ -98,10 +137,15 @@ async function writeAsync(
     value: 0n,
   } as any)
 
-  return { hash }
+  return {
+    hash,
+  }
 }
 
-async function read(functionName: string, args: Array<string | boolean> = []) {
+async function read(
+  functionName: string,
+  args: Array<string | boolean> = [],
+) {
   const client = getClient()
 
   return client.readContract({
@@ -125,13 +169,43 @@ export const airJudge = {
     name: string,
     criteria: string,
     rewardWei: bigint,
-  ) => write(account, 'create_campaign', [campaignId, name, criteria, rewardWei]),
+  ) =>
+    write(
+      account,
+      'create_campaign',
+      [
+        campaignId,
+        name,
+        criteria,
+        rewardWei,
+      ],
+    ),
 
-  fundCampaign: (account: string, campaignId: string, valueWei: bigint) =>
-    write(account, 'fund_campaign', [campaignId], valueWei),
+  fundCampaign: (
+    account: string,
+    campaignId: string,
+    valueWei: bigint,
+  ) =>
+    write(
+      account,
+      'fund_campaign',
+      [campaignId],
+      valueWei,
+    ),
 
-  setCampaignActive: (account: string, campaignId: string, active: boolean) =>
-    write(account, 'set_campaign_active', [campaignId, active]),
+  setCampaignActive: (
+    account: string,
+    campaignId: string,
+    active: boolean,
+  ) =>
+    write(
+      account,
+      'set_campaign_active',
+      [
+        campaignId,
+        active,
+      ],
+    ),
 
   submitApplication: (
     account: string,
@@ -140,99 +214,217 @@ export const airJudge = {
     proofUrl: string,
     evidenceUrl: string,
   ) =>
-    write(account, 'submit_application', [
-      campaignId,
-      description,
-      proofUrl,
-      evidenceUrl,
-    ]),
+    write(
+      account,
+      'submit_application',
+      [
+        campaignId,
+        description,
+        proofUrl,
+        evidenceUrl,
+      ],
+    ),
 
-  judgeApplication: (account: string, campaignId: string, applicant: string) =>
-    writeAsync(account, 'judge_application', [
-      campaignId,
-      normalizeAddress(applicant),
-    ]),
+  judgeApplication: (
+    account: string,
+    campaignId: string,
+    applicant: string,
+  ) =>
+    writeAsync(
+      account,
+      'judge_application',
+      [
+        campaignId,
+        normalizeAddress(applicant),
+      ],
+    ),
 
-  withdraw: (account: string, campaignId: string) =>
-    write(account, 'withdraw', [campaignId]),
+  withdraw: (
+    account: string,
+    campaignId: string,
+  ) =>
+    write(
+      account,
+      'withdraw',
+      [campaignId],
+    ),
 
-  getCampaignName: (campaignId: string) =>
-    read('get_campaign_name', [campaignId]) as Promise<string>,
+  getCampaignName: (
+    campaignId: string,
+  ) =>
+    read(
+      'get_campaign_name',
+      [campaignId],
+    ) as Promise<string>,
 
-  getCampaignCriteria: (campaignId: string) =>
-    read('get_campaign_criteria', [campaignId]) as Promise<string>,
+  getCampaignCriteria: (
+    campaignId: string,
+  ) =>
+    read(
+      'get_campaign_criteria',
+      [campaignId],
+    ) as Promise<string>,
 
-  getCampaignCreator: (campaignId: string) =>
-    read('get_campaign_creator', [campaignId]) as Promise<string>,
+  getCampaignCreator: (
+    campaignId: string,
+  ) =>
+    read(
+      'get_campaign_creator',
+      [campaignId],
+    ) as Promise<string>,
 
-  getCampaignReward: async (campaignId: string) =>
-    String(await read('get_campaign_reward', [campaignId])),
+  getCampaignReward: async (
+    campaignId: string,
+  ) =>
+    String(
+      await read(
+        'get_campaign_reward',
+        [campaignId],
+      ),
+    ),
 
-  isCampaignActive: (campaignId: string) =>
-    read('is_campaign_active', [campaignId]) as Promise<boolean>,
+  isCampaignActive: (
+    campaignId: string,
+  ) =>
+    read(
+      'is_campaign_active',
+      [campaignId],
+    ) as Promise<boolean>,
 
-  getCampaignPoolStatus: async (campaignId: string): Promise<CampaignPool> => {
-    const raw = String(await read('get_campaign_pool_status', [campaignId]))
+  getCampaignPoolStatus: async (
+    campaignId: string,
+  ): Promise<CampaignPool> => {
+    const raw = String(
+      await read(
+        'get_campaign_pool_status',
+        [campaignId],
+      ),
+    )
+
     const parsed = JSON.parse(raw)
+
     return {
-      pool_wei: String(parsed.pool_wei ?? 0),
-      reserved_wei: String(parsed.reserved_wei ?? 0),
-      available_wei: String(parsed.available_wei ?? 0),
+      pool_wei: String(
+        parsed.pool_wei ?? 0,
+      ),
+      reserved_wei: String(
+        parsed.reserved_wei ?? 0,
+      ),
+      available_wei: String(
+        parsed.available_wei ?? 0,
+      ),
     }
   },
 
-  getRequiredProofMarker: (campaignId: string, applicant: string) =>
-    read('get_required_proof_marker', [
-      campaignId,
-      normalizeAddress(applicant),
-    ]) as Promise<string>,
-
-  getApplicationStatus: (campaignId: string, applicant: string) =>
-    read('get_application_status', [
-      campaignId,
-      normalizeAddress(applicant),
-    ]) as Promise<string>,
-
-  getApplicationDescription: (campaignId: string, applicant: string) =>
-    read('get_application_description', [
-      campaignId,
-      normalizeAddress(applicant),
-    ]) as Promise<string>,
-
-  getApplicationProofUrl: (campaignId: string, applicant: string) =>
-    read('get_application_proof_url', [
-      campaignId,
-      normalizeAddress(applicant),
-    ]) as Promise<string>,
-
-  getApplicationEvidence: (campaignId: string, applicant: string) =>
-    read('get_application_evidence', [
-      campaignId,
-      normalizeAddress(applicant),
-    ]) as Promise<string>,
-
-  getApplicationReason: (campaignId: string, applicant: string) =>
-    read('get_application_reason', [
-      campaignId,
-      normalizeAddress(applicant),
-    ]) as Promise<string>,
-
-  getReviewedSnapshot: (campaignId: string, applicant: string) =>
-    read('get_reviewed_snapshot', [
-      campaignId,
-      normalizeAddress(applicant),
-    ]) as Promise<string>,
-
-  getPendingPayout: async (campaignId: string, applicant: string) =>
-    String(
-      await read('get_pending_payout', [
+  getRequiredProofMarker: (
+    campaignId: string,
+    applicant: string,
+  ) =>
+    read(
+      'get_required_proof_marker',
+      [
         campaignId,
         normalizeAddress(applicant),
-      ]),
+      ],
+    ) as Promise<string>,
+
+  getApplicationStatus: (
+    campaignId: string,
+    applicant: string,
+  ) =>
+    read(
+      'get_application_status',
+      [
+        campaignId,
+        normalizeAddress(applicant),
+      ],
+    ) as Promise<string>,
+
+  getApplicationDescription: (
+    campaignId: string,
+    applicant: string,
+  ) =>
+    read(
+      'get_application_description',
+      [
+        campaignId,
+        normalizeAddress(applicant),
+      ],
+    ) as Promise<string>,
+
+  getApplicationProofUrl: (
+    campaignId: string,
+    applicant: string,
+  ) =>
+    read(
+      'get_application_proof_url',
+      [
+        campaignId,
+        normalizeAddress(applicant),
+      ],
+    ) as Promise<string>,
+
+  getApplicationEvidence: (
+    campaignId: string,
+    applicant: string,
+  ) =>
+    read(
+      'get_application_evidence',
+      [
+        campaignId,
+        normalizeAddress(applicant),
+      ],
+    ) as Promise<string>,
+
+  getApplicationReason: (
+    campaignId: string,
+    applicant: string,
+  ) =>
+    read(
+      'get_application_reason',
+      [
+        campaignId,
+        normalizeAddress(applicant),
+      ],
+    ) as Promise<string>,
+
+  getReviewedSnapshot: (
+    campaignId: string,
+    applicant: string,
+  ) =>
+    read(
+      'get_reviewed_snapshot',
+      [
+        campaignId,
+        normalizeAddress(applicant),
+      ],
+    ) as Promise<string>,
+
+  getPendingPayout: async (
+    campaignId: string,
+    applicant: string,
+  ) =>
+    String(
+      await read(
+        'get_pending_payout',
+        [
+          campaignId,
+          normalizeAddress(applicant),
+        ],
+      ),
     ),
 
-  isEvidenceUsed: (campaignId: string, evidenceUrl: string) =>
-    read('is_evidence_used', [campaignId, evidenceUrl.trim()]) as Promise<boolean>,
+  isEvidenceUsed: (
+    campaignId: string,
+    evidenceUrl: string,
+  ) =>
+    read(
+      'is_evidence_used',
+      [
+        campaignId,
+        evidenceUrl.trim(),
+      ],
+    ) as Promise<boolean>,
 }
 
 export async function pollApplicationStatus(
@@ -241,19 +433,36 @@ export async function pollApplicationStatus(
   timeoutMs = 300_000,
 ) {
   const deadline = Date.now() + timeoutMs
+
   let delay = 6_000
   let last = 'PENDING'
 
   while (Date.now() < deadline) {
     try {
-      last = String(await airJudge.getApplicationStatus(campaignId, applicant))
-      if (last && last !== 'PENDING') return last
+      last = String(
+        await airJudge.getApplicationStatus(
+          campaignId,
+          applicant,
+        ),
+      )
+
+      if (
+        last &&
+        last !== 'PENDING'
+      ) {
+        return last
+      }
     } catch {
-      // Ignore temporary Studio rate-limit/read errors while validators run.
+      // Ignore temporary Studio read/rate-limit errors
+      // while validators are reaching consensus.
     }
 
     await sleep(delay)
-    delay = Math.min(Math.round(delay * 1.35), 15_000)
+
+    delay = Math.min(
+      Math.round(delay * 1.35),
+      15_000,
+    )
   }
 
   return last
