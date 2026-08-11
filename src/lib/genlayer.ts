@@ -82,6 +82,28 @@ const getWriteClient = (
       getEthereumProvider() as any,
   } as any)
 
+export async function getConnectedWallet(): Promise<string> {
+  const ethereum =
+    getEthereumProvider()
+
+  if (!ethereum) {
+    return ''
+  }
+
+  const accounts =
+    (await ethereum.request({
+      method: 'eth_accounts',
+    })) as string[]
+
+  if (!accounts?.[0]) {
+    return ''
+  }
+
+  return normalizeAddress(
+    accounts[0],
+  )
+}
+
 export async function connectWallet(): Promise<string> {
   const ethereum =
     getEthereumProvider()
@@ -116,6 +138,19 @@ export const sleep = (
     setTimeout(resolve, ms),
   )
 
+function submissionError(
+  error: unknown,
+) {
+  const details =
+    error instanceof Error
+      ? error.message
+      : String(error)
+
+  return new Error(
+    `Transaction was not submitted: no transaction hash was returned. It is safe to retry after checking the wallet/RPC connection. Details: ${details}`,
+  )
+}
+
 async function write(
   account: string,
   functionName: string,
@@ -136,13 +171,21 @@ async function write(
    * definitely failed. Doing so can make the
    * user click again and duplicate the write.
    */
-  const hash =
-    await client.writeContract({
-      address: CONTRACT_ADDRESS,
-      functionName,
-      args,
-      value,
-    } as any)
+  let hash: any
+
+  try {
+    hash =
+      await client.writeContract({
+        address: CONTRACT_ADDRESS,
+        functionName,
+        args,
+        value,
+      } as any)
+  } catch (error) {
+    throw submissionError(
+      error,
+    )
+  }
 
   let monitoringWarning = false
 
@@ -174,13 +217,21 @@ async function writeAsync(
   const client =
     getWriteClient(account)
 
-  const hash =
-    await client.writeContract({
-      address: CONTRACT_ADDRESS,
-      functionName,
-      args,
-      value: 0n,
-    } as any)
+  let hash: any
+
+  try {
+    hash =
+      await client.writeContract({
+        address: CONTRACT_ADDRESS,
+        functionName,
+        args,
+        value: 0n,
+      } as any)
+  } catch (error) {
+    throw submissionError(
+      error,
+    )
+  }
 
   return {
     hash: String(hash),
