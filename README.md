@@ -177,31 +177,31 @@ PENDING
 
 Security & Settlement Model
 
-Property                            V3 implementation
+Property                           V3 implementation
 
-Account control                 Applicant is derived fromgl.message.sender_address, notfrom a self-declared handle.
+Account control                Applicant is derived fromgl.message.sender_address, notfrom a self-declared handle.
 
-Proof/evidence binding          Proof page must contain thecampaign-and-wallet marker and theexact submitted evidence URL.
+Proof/evidence binding         Proof page must contain thecampaign-and-wallet marker and theexact submitted evidence URL.
 
-One application per wallet      Application state is keyed bycampaign + applicant.
+One application per wallet     Application state is keyed bycampaign + applicant.
 
-Evidence anti-replay            The same evidence URL cannot besubmitted twice to the samecampaign.
+Evidence anti-replay           The same evidence URL cannot besubmitted twice to the samecampaign.
 
-Consensus evidence snapshot     Validators use strict_eq overfetched evidence before qualitativeadjudication.
+Consensus evidence snapshot    Validators use strict_eq overfetched evidence beforequalitative adjudication.
 
-Reviewed-content commitment     The exact consensus-agreed reviewedsnapshot is stored onchain.
+Reviewed-content commitment    The exact consensus-agreedreviewed snapshot is storedonchain.
 
-Claim is not proof              Applicant description is treated asuntrusted context and cannotestablish eligibility by itself.
+Claim is not proof             Applicant description is treatedas untrusted context and cannotestablish eligibility by itself.
 
-Prompt-injection fencing        Claim and evidence are delimitedand validators are instructed toignore embedded instructions.
+Prompt-injection fencing       Claim and evidence are delimitedand validators are instructed toignore embedded instructions.
 
-Fail-closed behavior            Failed provenance, failed evidencefetch, or malformed adjudicationoutput cannot produce an eligiblepayout.
+Fail-closed behavior           Failed provenance, failed evidencefetch, or malformed adjudicationoutput cannot produce an eligiblepayout.
 
-Reserved-fund accounting        Eligible rewards are reservedbefore they become claimable.
+Reserved-fund accounting       Eligible rewards are reservedbefore they become claimable.
 
-Underfunded handling            Eligibility can be recorded withoutcreating a claimable payout whenavailable campaign funds areinsufficient.
+Underfunded handling           Eligibility can be recordedwithout creating a claimablepayout when available campaignfunds are insufficient.
 
-Applicant-only withdrawal       withdraw() derives the claimantfrom gl.message.sender_addressand pays that applicant's pendingreward.
+Applicant-only withdrawal      withdraw() derives the claimantfrom gl.message.sender_addressand pays that applicant's pendingreward.
 
 Important Scope
 
@@ -351,6 +351,77 @@ During testing, StudioNet returned rate-limit and intermittentFailed to fetch er
 
 The frontend distinguishes a failure before a transaction hash isreturned from a transaction that has already been submitted. Once a hashexists, monitoring/read failures are treated separately so the UI doesnot instruct the user to submit the same action again.
 
+Quick Reviewer Test
+
+This is the shortest end-to-end path for verifying AirJudge V3.
+
+Connect a creator wallet.
+
+Create a campaign with qualitative eligibility criteria and a 5GEN reward.
+
+Fund the campaign with 10 GEN.
+
+Switch to a different applicant wallet and load the campaign.
+
+Copy the generated proof marker:
+
+AIRJUDGE_PROOF:<campaign_id>:<applicant_wallet>
+
+Publish a public HTTPS evidence page containing a contribution thatsatisfies the campaign criteria.
+
+Publish a separate public proof page containing:
+
+AIRJUDGE_PROOF:<campaign_id>:<applicant_wallet>
+
+evidence_url:<exact_evidence_url>
+
+Submit the application with:
+
+Contribution Description
+
+Proof / Binding URL
+
+Contribution Evidence URL
+
+Run GenLayer adjudication once.
+
+If consensus returns ELIGIBLE_RESERVED, claim the 5 GEN rewardfrom the applicant wallet.
+
+Expected Flow
+
+PENDING
+→ provenance verification
+→ consensus evidence snapshot
+→ AI adjudication
+→ ELIGIBLE_RESERVED
+→ withdraw()
+→ ELIGIBLE_PAID
+
+Expected Accounting
+
+Before adjudication:
+
+Pool       10 GEN
+Reserved    0 GEN
+Available  10 GEN
+
+After an eligible verdict:
+
+Pool       10 GEN
+Reserved    5 GEN
+Available   5 GEN
+Claimable   5 GEN
+
+After claim:
+
+Pool        5 GEN
+Reserved    0 GEN
+Available   5 GEN
+Claimable   0 GEN
+Status      ELIGIBLE_PAID
+
+Important: Run adjudication and claim only once. If StudioNetreturns a temporary RPC or monitoring error after a transaction hashhas already been produced, reload the application/campaign stateinstead of submitting the transaction again.
+
 Testing Guide
 
 Prerequisites
@@ -458,25 +529,25 @@ Post-claim refresh failure: reload the application and campaignstate to verify s
 
 Tech Stack
 
-Layer                               Technology
+Layer                           Technology
 
-Contract                        Python / GenLayer Intelligent Contract,GenVM v0.2.16
+Contract                    Python / GenLayer Intelligent Contract,GenVM v0.2.16
 
-Exact snapshot consensus        gl.eq_principle.strict_eq
+Exact snapshot consensus    gl.eq_principle.strict_eq
 
-AI adjudication                 gl.eq_principle.prompt_non_comparative
+AI adjudication             gl.eq_principle.prompt_non_comparative
 
-Public evidence retrieval       gl.nondet.web.render
+Public evidence retrieval   gl.nondet.web.render
 
-Native payout                   GenLayer EVM contract interface / nativetransfer emission
+Native payout               GenLayer EVM contract interface / nativetransfer emission
 
-Frontend                        Vite + React + TypeScript
+Frontend                    Vite + React + TypeScript
 
-Blockchain SDK                  genlayer-js + viem
+Blockchain SDK              genlayer-js + viem
 
-Wallet                          MetaMask
+Wallet                      MetaMask
 
-Hosting                         Vercel
+Hosting                     Vercel
 
 Project Structure
 
