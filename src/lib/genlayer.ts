@@ -2,7 +2,15 @@ import { createClient } from 'genlayer-js'
 import { studionet } from 'genlayer-js/chains'
 import { TransactionStatus } from 'genlayer-js/types'
 import { getAddress } from 'viem'
-import { CONTRACT_ADDRESS, STUDIO_RPC } from './config'
+import {
+  CONTRACT_ADDRESS,
+  EXPLORER_BASE,
+  STUDIO_CHAIN_ID_HEX,
+  STUDIO_CHAIN_NAME,
+  STUDIO_RPC,
+  STUDIO_WALLET_RPC,
+} from './config'
+import { errorCode, normalizeError } from './errors'
 
 const chain = {
   ...studionet,
@@ -56,7 +64,7 @@ export const parseGenToWei = (value: string) => {
   )
 }
 
-const getEthereumProvider = () => {
+export const getEthereumProvider = () => {
   if (
     typeof window === 'undefined'
   ) {
@@ -64,6 +72,62 @@ const getEthereumProvider = () => {
   }
 
   return (window as any).ethereum
+}
+
+export async function getChainId(): Promise<string> {
+  const ethereum = getEthereumProvider()
+
+  if (!ethereum) return ''
+
+  const chainId = await ethereum.request({ method: 'eth_chainId' })
+  return String(chainId ?? '').toLowerCase()
+}
+
+export const isStudioChain = (chainId: string) =>
+  chainId.toLowerCase() === STUDIO_CHAIN_ID_HEX
+
+export async function ensureStudioChain(): Promise<string> {
+  const ethereum = getEthereumProvider()
+
+  if (!ethereum) {
+    throw new Error('No browser wallet detected. Install MetaMask or a compatible wallet.')
+  }
+
+  const current = await getChainId()
+  if (isStudioChain(current)) return current
+
+  try {
+    await ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: STUDIO_CHAIN_ID_HEX }],
+    })
+  } catch (error) {
+    if (String(errorCode(error) ?? '') !== '4902') throw error
+
+    await ethereum.request({
+      method: 'wallet_addEthereumChain',
+      params: [
+        {
+          chainId: STUDIO_CHAIN_ID_HEX,
+          chainName: STUDIO_CHAIN_NAME,
+          rpcUrls: [STUDIO_WALLET_RPC],
+          nativeCurrency: {
+            name: 'GEN Token',
+            symbol: 'GEN',
+            decimals: 18,
+          },
+          blockExplorerUrls: [EXPLORER_BASE],
+        },
+      ],
+    })
+  }
+
+  const updated = await getChainId()
+  if (!isStudioChain(updated)) {
+    throw new Error('Switch MetaMask to GenLayer Studio (chain 61999) before continuing.')
+  }
+
+  return updated
 }
 
 const getReadClient = () =>
@@ -141,13 +205,20 @@ export const sleep = (
 function submissionError(
   error: unknown,
 ) {
-  const details =
-    error instanceof Error
-      ? error.message
-      : String(error)
+  const normalized = normalizeError(error)
+
+  console.error('[AirJudge] transaction submission failed before tx hash', {
+    code: normalized.code,
+    message: normalized.message,
+    raw: error,
+  })
+
+  const suffix = normalized.code === undefined
+    ? normalized.message
+    : `${normalized.message} (code ${normalized.code})`
 
   return new Error(
-    `Transaction was not submitted: no transaction hash was returned. It is safe to retry after checking the wallet/RPC connection. Details: ${details}`,
+    `Transaction was not submitted: no transaction hash was returned. It is safe to retry after checking the wallet/network connection. ${suffix}`,
   )
 }
 
@@ -159,6 +230,8 @@ async function write(
   >,
   value: bigint = 0n,
 ) {
+  await ensureStudioChain()
+
   const client =
     getWriteClient(account)
 
@@ -214,6 +287,8 @@ async function writeAsync(
     string | boolean | bigint
   >,
 ) {
+  await ensureStudioChain()
+
   const client =
     getWriteClient(account)
 

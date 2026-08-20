@@ -19,7 +19,11 @@ import {
 import {
   airJudge,
   connectWallet,
+  ensureStudioChain,
+  getChainId,
   getConnectedWallet,
+  getEthereumProvider,
+  isStudioChain,
   formatWei,
   normalizeAddress,
   parseGenToWei,
@@ -27,8 +31,12 @@ import {
   sleep,
 } from './lib/genlayer'
 
+import { reportError } from './lib/errors'
+
 import StatusPill from './components/StatusPill'
 import WalletButton from './components/WalletButton'
+
+type WorkspaceTab = 'campaign' | 'proof' | 'review'
 
 type Busy =
   | ''
@@ -40,6 +48,7 @@ type Busy =
   | 'judge'
   | 'withdraw'
   | 'toggle'
+  | 'switch'
 
 type Campaign = {
   id: string
@@ -152,6 +161,9 @@ function App() {
   ] =
     useState<Busy>('')
 
+  const [workspaceTab, setWorkspaceTab] =
+    useState<WorkspaceTab>('campaign')
+
   const [
     notice,
     setNotice,
@@ -167,35 +179,80 @@ function App() {
       | 'error'
     >('info')
 
+  const [
+    chainId,
+    setChainId,
+  ] = useState('')
+
   /*
-   * Restore a wallet that has already authorized this site.
-   * eth_accounts does not open a wallet popup.
+   * Restore an already-authorized wallet and keep account/network state
+   * synchronized with MetaMask. This prevents a stale proof marker after
+   * the reviewer changes accounts in the extension.
    */
   useEffect(() => {
     let cancelled = false
+    const ethereum = getEthereumProvider()
 
     const restore = async () => {
       try {
-        const address =
-          await getConnectedWallet()
+        const [address, currentChain] = await Promise.all([
+          getConnectedWallet(),
+          getChainId(),
+        ])
 
-        if (
-          !cancelled &&
-          address
-        ) {
+        if (cancelled) return
+
+        setChainId(currentChain)
+
+        if (address) {
           setAccount(address)
           setLookupWallet(address)
         }
-      } catch {
-        // Wallet restore is best-effort.
-        // Manual CONNECT remains available.
+      } catch (error) {
+        console.warn('[AirJudge] wallet restore failed', error)
       }
     }
+
+    const handleAccountsChanged = (accounts: string[]) => {
+      try {
+        const next = accounts?.[0] ? normalizeAddress(accounts[0]) : ''
+        setAccount(next)
+        setLookupWallet(next)
+
+        if (next) {
+          setNoticeKind('info')
+          setNotice(
+            `Wallet changed to ${short(next)}. The proof marker below now belongs to this wallet.`,
+          )
+        } else {
+          setNoticeKind('info')
+          setNotice('Wallet disconnected.')
+        }
+      } catch (error) {
+        setNoticeKind('error')
+        setNotice(reportError('accountsChanged', error))
+      }
+    }
+
+    const handleChainChanged = (nextChainId: string) => {
+      const next = String(nextChainId ?? '').toLowerCase()
+      setChainId(next)
+
+      if (next && !isStudioChain(next)) {
+        setNoticeKind('info')
+        setNotice('MetaMask changed networks. Switch to GenLayer Studio (61999) before a write.')
+      }
+    }
+
+    ethereum?.on?.('accountsChanged', handleAccountsChanged)
+    ethereum?.on?.('chainChanged', handleChainChanged)
 
     void restore()
 
     return () => {
       cancelled = true
+      ethereum?.removeListener?.('accountsChanged', handleAccountsChanged)
+      ethereum?.removeListener?.('chainChanged', handleChainChanged)
     }
   }, [])
 
@@ -314,9 +371,7 @@ function App() {
       )
 
       setNotice(
-        error instanceof Error
-          ? error.message
-          : 'Unexpected error.',
+        reportError(action || 'action', error),
       )
     } finally {
       setBusy('')
@@ -338,21 +393,37 @@ function App() {
         const address =
           await connectWallet()
 
+        // Account approval is authoritative. Keep it connected even if the
+        // user dismisses a later network-switch prompt.
         setAccount(address)
+        setLookupWallet(address)
 
-        setLookupWallet(
-          address,
-        )
+        try {
+          const currentChain =
+            await ensureStudioChain()
+          setChainId(currentChain)
 
-        setNoticeKind(
-          'success',
-        )
+          setNoticeKind('success')
+          setNotice(`Wallet connected: ${short(address)} · GenLayer Studio`)
+        } catch (error) {
+          try {
+            setChainId(await getChainId())
+          } catch {
+            // best-effort chain status refresh
+          }
+          throw error
+        }
+      },
+    )
 
-        setNotice(
-          `Wallet connected: ${short(
-            address,
-          )}`,
-        )
+  const switchNetwork = () =>
+    run(
+      'switch',
+      async () => {
+        const current = await ensureStudioChain()
+        setChainId(current)
+        setNoticeKind('success')
+        setNotice('MetaMask is now on GenLayer Studio (chain 61999).')
       },
     )
 
@@ -764,6 +835,45 @@ function App() {
         account,
       ],
     )
+
+  const proofPageText =
+    useMemo(
+      () => {
+        const cleanEvidenceUrl = evidenceUrl.trim()
+
+        if (!requiredMarker || !cleanEvidenceUrl) {
+          return ''
+        }
+
+        return `${requiredMarker}\nevidence_url:${cleanEvidenceUrl}`
+      },
+      [requiredMarker, evidenceUrl],
+    )
+
+  const copyProofPage =
+    async () => {
+      if (!requiredMarker) {
+        setNoticeKind('error')
+        setNotice('Connect the applicant wallet and load the campaign first.')
+        return
+      }
+
+      if (!evidenceUrl.trim().startsWith('https://')) {
+        setNoticeKind('error')
+        setNotice('Paste the exact public HTTPS evidence URL first. AirJudge binds that URL into the proof page.')
+        return
+      }
+
+      const copied = await copyText(proofPageText)
+
+      if (copied) {
+        setNoticeKind('success')
+        setNotice('Full two-line proof page copied. Publish these exact lines at a public HTTPS URL, then paste that URL into Proof / Binding URL.')
+      } else {
+        setNoticeKind('info')
+        setNotice('Browser blocked clipboard access. Select the two-line proof page and copy it manually.')
+      }
+    }
 
   const copyMarker =
     async () => {
@@ -1272,34 +1382,40 @@ function App() {
       : '0'
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark">
-            AJ
+    <div className="app pro-app">
+      <header className="topbar pro-topbar">
+        <div className="brand-row">
+          <div className="brand">
+            <div className="brand-mark">AJ</div>
+
+            <div>
+              <strong>AirJudge</strong>
+              <span>Consensus reward adjudication</span>
+            </div>
           </div>
 
-          <div>
-            <strong>
-              AirJudge
-            </strong>
+          <div className="brand-divider" aria-hidden="true" />
 
-            <span>
-              GenLayer contribution adjudication
-            </span>
-          </div>
+          <a
+            className="genlayer-brand"
+            href="https://genlayer.com/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Built on GenLayer"
+            title="Built on GenLayer"
+          >
+            <span>BUILT ON</span>
+            <img
+              src="https://genlayer.com/brand/genlayer-logo-white-cropped.svg"
+              alt="GenLayer"
+            />
+          </a>
         </div>
 
         <div className="top-actions">
           <a
-            href={
-              explorerAddress
-            }
-            target={
-              contractConfigured
-                ? '_blank'
-                : undefined
-            }
+            href={explorerAddress}
+            target={contractConfigured ? '_blank' : undefined}
             rel="noreferrer"
           >
             CONTRACT ↗
@@ -1308,34 +1424,52 @@ function App() {
           <WalletButton
             account={account}
             onConnect={connect}
-            busy={
-              busy ===
-              'connect'
-            }
+            busy={busy === 'connect'}
           />
         </div>
       </header>
 
-      <main className="shell">
-        <section className="hero">
-          <span className="eyebrow">
-            GENLAYER / INTELLIGENT CONTRACT
-          </span>
+      <main className="shell pro-shell">
+        <section className="pro-hero">
+          <div className="hero-copy">
+            <span className="eyebrow">GENLAYER / INTELLIGENT CONTRACT</span>
 
-          <h1>
-            Prove contribution.
-            <br />
+            <h1>
+              Contribution rewards,
+              <em> adjudicated by consensus.</em>
+            </h1>
 
-            <em>
-              Let consensus decide.
-            </em>
-          </h1>
+            <p>
+              Create funded reward campaigns, bind public contribution evidence
+              to an applicant wallet, let GenLayer validators adjudicate, then
+              settle eligible rewards onchain.
+            </p>
+          </div>
 
-          <p>
-            Campaign creators define qualitative eligibility criteria and fund rewards.
-            Applicants provide public proof and evidence.
-            GenLayer validators adjudicate the contribution before funds can be claimed.
-          </p>
+          <div className="hero-status-card">
+            <span className="mini-label">CURRENT SESSION</span>
+
+            <div className="hero-status-row">
+              <span>Wallet</span>
+              <strong>{account ? short(account, 8, 6) : 'Not connected'}</strong>
+            </div>
+
+            <div className="hero-status-row">
+              <span>Network</span>
+              <strong className={chainId && isStudioChain(chainId) ? 'ok-text' : ''}>
+                {chainId
+                  ? isStudioChain(chainId)
+                    ? 'StudioNet · 61999'
+                    : 'Wrong network'
+                  : '—'}
+              </strong>
+            </div>
+
+            <div className="hero-status-row">
+              <span>Campaign</span>
+              <strong>{campaign ? campaign.id : 'Not loaded'}</strong>
+            </div>
+          </div>
         </section>
 
         {!contractConfigured && (
@@ -1344,699 +1478,516 @@ function App() {
           </div>
         )}
 
+        {account && chainId && !isStudioChain(chainId) && (
+          <div className="network-banner pro-network-banner">
+            <div>
+              <strong>WRONG NETWORK</strong>
+              <span>Switch MetaMask to GenLayer Studio (chain 61999) before a write.</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={switchNetwork}
+              disabled={busy !== ''}
+            >
+              {busy === 'switch' ? 'SWITCHING…' : 'SWITCH NETWORK'}
+            </button>
+          </div>
+        )}
+
         {notice && (
-          <div
-            className={`notice ${noticeKind}`}
-          >
+          <div className={`notice ${noticeKind} pro-notice`}>
             {notice}
           </div>
         )}
 
-        <section className="panel">
-          <div className="panel-head">
-            <div>
-              <span className="step">
-                01 / CAMPAIGN
-              </span>
+        <section className="summary-strip">
+          <div>
+            <span>CAMPAIGN</span>
+            <strong>{campaign ? campaign.name : '—'}</strong>
+          </div>
 
-              <h2>
-                Load campaign
-              </h2>
+          <div>
+            <span>STATUS</span>
+            <strong>{campaign ? (campaign.active ? 'ACTIVE' : 'PAUSED') : '—'}</strong>
+          </div>
+
+          <div>
+            <span>REWARD</span>
+            <strong>{campaign ? `${formatWei(campaign.rewardWei)} GEN` : '—'}</strong>
+          </div>
+
+          <div>
+            <span>POOL</span>
+            <strong>{campaign ? `${formatWei(campaign.poolWei)} GEN` : '—'}</strong>
+          </div>
+
+          <div>
+            <span>AVAILABLE</span>
+            <strong>{campaign ? `${formatWei(campaign.availableWei)} GEN` : '—'}</strong>
+          </div>
+
+          <div>
+            <span>APPLICATION</span>
+            <strong>{application ? application.status : '—'}</strong>
+          </div>
+        </section>
+
+        <nav className="workspace-tabs" aria-label="AirJudge workflow">
+          <button
+            type="button"
+            className={workspaceTab === 'campaign' ? 'workspace-tab active' : 'workspace-tab'}
+            onClick={() => setWorkspaceTab('campaign')}
+          >
+            <span>01</span>
+            Campaign
+          </button>
+
+          <button
+            type="button"
+            className={workspaceTab === 'proof' ? 'workspace-tab active' : 'workspace-tab'}
+            onClick={() => setWorkspaceTab('proof')}
+            disabled={!campaign}
+          >
+            <span>02</span>
+            Proof & Submit
+          </button>
+
+          <button
+            type="button"
+            className={workspaceTab === 'review' ? 'workspace-tab active' : 'workspace-tab'}
+            onClick={() => setWorkspaceTab('review')}
+            disabled={!campaign}
+          >
+            <span>03</span>
+            Review & Claim
+            {application && <b className="tab-status-dot" />}
+          </button>
+        </nav>
+
+        {workspaceTab === 'campaign' && (
+          <section className="workspace-view campaign-view">
+            <div className="workspace-grid campaign-top-grid">
+              <article className="panel pro-panel">
+                <div className="panel-head compact-head">
+                  <div>
+                    <span className="step">LOAD</span>
+                    <h2>Open campaign</h2>
+                  </div>
+
+                  {campaign && (
+                    <StatusPill status={campaign.active ? 'ACTIVE' : 'PAUSED'} />
+                  )}
+                </div>
+
+                <div className="inline-form pro-inline-form">
+                  <input
+                    value={campaignId}
+                    onChange={(event) => setCampaignId(event.target.value)}
+                    placeholder="Enter campaign ID"
+                  />
+
+                  <button
+                    onClick={handleLoadCampaign}
+                    disabled={busy !== ''}
+                  >
+                    {busy === 'load' ? 'LOADING…' : 'LOAD'}
+                  </button>
+                </div>
+
+                {campaign ? (
+                  <div className="campaign-detail">
+                    <div className="metric-grid">
+                      <div>
+                        <span>REWARD</span>
+                        <strong>{formatWei(campaign.rewardWei)} GEN</strong>
+                      </div>
+                      <div>
+                        <span>POOL</span>
+                        <strong>{formatWei(campaign.poolWei)} GEN</strong>
+                      </div>
+                      <div>
+                        <span>RESERVED</span>
+                        <strong>{formatWei(campaign.reservedWei)} GEN</strong>
+                      </div>
+                      <div>
+                        <span>AVAILABLE</span>
+                        <strong>{formatWei(campaign.availableWei)} GEN</strong>
+                      </div>
+                    </div>
+
+                    <div className="criteria-box pro-criteria">
+                      <span>ELIGIBILITY CRITERIA</span>
+                      <p>{campaign.criteria}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    Load an existing campaign or create one beside it.
+                  </div>
+                )}
+              </article>
+
+              <article className="panel pro-panel">
+                <div className="panel-head compact-head">
+                  <div>
+                    <span className="step">CREATE</span>
+                    <h2>New reward campaign</h2>
+                  </div>
+                </div>
+
+                <form onSubmit={createCampaign} className="form-grid compact-form-grid">
+                  <label>
+                    <span>CAMPAIGN ID</span>
+                    <input
+                      value={createId}
+                      onChange={(event) => setCreateId(event.target.value)}
+                      placeholder="genlayer-builders"
+                    />
+                  </label>
+
+                  <label>
+                    <span>CAMPAIGN NAME</span>
+                    <input
+                      value={createName}
+                      onChange={(event) => setCreateName(event.target.value)}
+                      placeholder="GenLayer Builders"
+                    />
+                  </label>
+
+                  <label>
+                    <span>REWARD / GEN</span>
+                    <input
+                      value={createReward}
+                      onChange={(event) => setCreateReward(event.target.value)}
+                    />
+                  </label>
+
+                  <label className="wide">
+                    <span>ELIGIBILITY CRITERIA</span>
+                    <textarea
+                      rows={3}
+                      value={createCriteria}
+                      onChange={(event) => setCreateCriteria(event.target.value)}
+                      placeholder="Applicant must provide verifiable evidence of..."
+                    />
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={busy !== '' || !account}
+                  >
+                    {busy === 'create' ? 'CREATING / VERIFYING…' : 'CREATE CAMPAIGN'}
+                  </button>
+                </form>
+              </article>
             </div>
 
             {campaign && (
-              <StatusPill
-                status={
-                  campaign.active
-                    ? 'ACTIVE'
-                    : 'PAUSED'
-                }
-              />
-            )}
-          </div>
-
-          <div className="inline-form">
-            <input
-              value={campaignId}
-              onChange={(
-                event,
-              ) =>
-                setCampaignId(
-                  event.target
-                    .value,
-                )
-              }
-              placeholder="Enter campaign ID"
-            />
-
-            <button
-              onClick={
-                handleLoadCampaign
-              }
-              disabled={
-                busy !== ''
-              }
-            >
-              {busy ===
-              'load'
-                ? 'LOADING…'
-                : 'LOAD'}
-            </button>
-          </div>
-
-          {campaign && (
-            <>
-              <div className="campaign-grid">
-                <div>
-                  <span>
-                    CAMPAIGN
-                  </span>
-
-                  <strong>
-                    {
-                      campaign.name
-                    }
-                  </strong>
-                </div>
-
-                <div>
-                  <span>
-                    REWARD
-                  </span>
-
-                  <strong>
-                    {formatWei(
-                      campaign.rewardWei,
-                    )}{' '}
-                    GEN
-                  </strong>
-                </div>
-
-                <div>
-                  <span>
-                    POOL
-                  </span>
-
-                  <strong>
-                    {formatWei(
-                      campaign.poolWei,
-                    )}{' '}
-                    GEN
-                  </strong>
-                </div>
-
-                <div>
-                  <span>
-                    RESERVED
-                  </span>
-
-                  <strong>
-                    {formatWei(
-                      campaign.reservedWei,
-                    )}{' '}
-                    GEN
-                  </strong>
-                </div>
-
-                <div>
-                  <span>
-                    AVAILABLE
-                  </span>
-
-                  <strong>
-                    {formatWei(
-                      campaign.availableWei,
-                    )}{' '}
-                    GEN
-                  </strong>
-                </div>
-
-                <div>
-                  <span>
-                    CREATOR
-                  </span>
-
-                  <strong>
-                    {short(
-                      campaign.creator,
-                    )}
-                  </strong>
-                </div>
-              </div>
-
-              <div className="criteria-box">
-                <span>
-                  ELIGIBILITY CRITERIA
-                </span>
-
-                <p>
-                  {
-                    campaign.criteria
-                  }
-                </p>
-              </div>
-            </>
-          )}
-        </section>
-
-        <section className="panel">
-          <div className="panel-head">
-            <div>
-              <span className="step">
-                02 / CREATE
-              </span>
-
-              <h2>
-                Create reward campaign
-              </h2>
-            </div>
-          </div>
-
-          <form
-            onSubmit={
-              createCampaign
-            }
-            className="form-grid"
-          >
-            <label>
-              <span>
-                CAMPAIGN ID
-              </span>
-
-              <input
-                value={
-                  createId
-                }
-                onChange={(
-                  event,
-                ) =>
-                  setCreateId(
-                    event.target
-                      .value,
-                  )
-                }
-                placeholder="genlayer-builders"
-              />
-            </label>
-
-            <label>
-              <span>
-                CAMPAIGN NAME
-              </span>
-
-              <input
-                value={
-                  createName
-                }
-                onChange={(
-                  event,
-                ) =>
-                  setCreateName(
-                    event.target
-                      .value,
-                  )
-                }
-                placeholder="GenLayer Builders"
-              />
-            </label>
-
-            <label>
-              <span>
-                REWARD / GEN
-              </span>
-
-              <input
-                value={
-                  createReward
-                }
-                onChange={(
-                  event,
-                ) =>
-                  setCreateReward(
-                    event.target
-                      .value,
-                  )
-                }
-              />
-            </label>
-
-            <label className="wide">
-              <span>
-                ELIGIBILITY CRITERIA
-              </span>
-
-              <textarea
-                rows={4}
-                value={
-                  createCriteria
-                }
-                onChange={(
-                  event,
-                ) =>
-                  setCreateCriteria(
-                    event.target
-                      .value,
-                  )
-                }
-                placeholder="Applicant must provide verifiable evidence of..."
-              />
-            </label>
-
-            <button
-              type="submit"
-              disabled={
-                busy !== '' ||
-                !account
-              }
-            >
-              {busy ===
-              'create'
-                ? 'CREATING / VERIFYING…'
-                : 'CREATE CAMPAIGN'}
-            </button>
-          </form>
-        </section>
-
-        {campaign && (
-          <section className="panel">
-            <div className="panel-head">
-              <div>
-                <span className="step">
-                  03 / FUND
-                </span>
-
-                <h2>
-                  Campaign reward pool
-                </h2>
-              </div>
-            </div>
-
-            <form
-              onSubmit={
-                fundCampaign
-              }
-              className="inline-form"
-            >
-              <input
-                value={
-                  fundAmount
-                }
-                onChange={(
-                  event,
-                ) =>
-                  setFundAmount(
-                    event.target
-                      .value,
-                  )
-                }
-                placeholder="GEN amount"
-              />
-
-              <button
-                type="submit"
-                disabled={
-                  busy !== '' ||
-                  !account ||
-                  !owner
-                }
-              >
-                {busy ===
-                'fund'
-                  ? 'FUNDING / VERIFYING…'
-                  : 'FUND CAMPAIGN'}
-              </button>
-            </form>
-
-            {owner && (
-              <button
-                className="secondary"
-                onClick={
-                  toggleCampaign
-                }
-                disabled={
-                  busy !== ''
-                }
-              >
-                {campaign.active
-                  ? 'PAUSE CAMPAIGN'
-                  : 'ACTIVATE CAMPAIGN'}
-              </button>
-            )}
-          </section>
-        )}
-
-        {campaign && (
-          <section className="panel">
-            <div className="panel-head">
-              <div>
-                <span className="step">
-                  04 / PROOF
-                </span>
-
-                <h2>
-                  Submit contribution
-                </h2>
-              </div>
-            </div>
-
-            <div className="proof-marker">
-              <span>
-                REQUIRED PROOF MARKER
-              </span>
-
-              <code>
-                {requiredMarker ||
-                  'Connect applicant wallet to generate marker'}
-              </code>
-
-              <button
-                type="button"
-                onClick={
-                  copyMarker
-                }
-                disabled={
-                  !account
-                }
-              >
-                COPY MARKER
-              </button>
-            </div>
-
-            {owner && (
-              <div className="notice info">
-                Campaign creator cannot submit an application.
-                Switch to an applicant wallet.
-              </div>
-            )}
-
-            <form
-              onSubmit={
-                submitApplication
-              }
-              className="form-grid"
-            >
-              <label className="wide">
-                <span>
-                  CONTRIBUTION DESCRIPTION
-                </span>
-
-                <textarea
-                  rows={5}
-                  value={
-                    description
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setDescription(
-                      event.target
-                        .value,
-                    )
-                  }
-                  placeholder="Describe the concrete implemented work..."
-                />
-              </label>
-
-              <label className="wide">
-                <span>
-                  PROOF / BINDING URL
-                </span>
-
-                <input
-                  value={
-                    proofUrl
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setProofUrl(
-                      event.target
-                        .value,
-                    )
-                  }
-                  placeholder="https://..."
-                />
-              </label>
-
-              <label className="wide">
-                <span>
-                  CONTRIBUTION EVIDENCE URL
-                </span>
-
-                <input
-                  value={
-                    evidenceUrl
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setEvidenceUrl(
-                      event.target
-                        .value,
-                    )
-                  }
-                  placeholder="https://..."
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={
-                  busy !== '' ||
-                  !account ||
-                  owner ||
-                  !campaign.active
-                }
-              >
-                {busy ===
-                'submit'
-                  ? 'SUBMITTING / VERIFYING…'
-                  : 'SUBMIT EVIDENCE'}
-              </button>
-            </form>
-          </section>
-        )}
-
-        {campaign && (
-          <section className="panel">
-            <div className="panel-head">
-              <div>
-                <span className="step">
-                  05 / ADJUDICATION
-                </span>
-
-                <h2>
-                  AI review & settlement
-                </h2>
-              </div>
-            </div>
-
-            <div className="inline-form">
-              <input
-                value={
-                  lookupWallet
-                }
-                onChange={(
-                  event,
-                ) =>
-                  setLookupWallet(
-                    event.target
-                      .value,
-                  )
-                }
-                placeholder="0x applicant wallet"
-              />
-
-              <button
-                onClick={
-                  handleLoadApplication
-                }
-                disabled={
-                  busy !== ''
-                }
-              >
-                LOAD APPLICATION
-              </button>
-            </div>
-
-            {application && (
-              <div className="application">
-                <div className="application-head">
+              <article className="panel pro-panel fund-panel">
+                <div className="panel-head compact-head">
                   <div>
-                    <span>
-                      APPLICANT
-                    </span>
-
-                    <strong>
-                      {short(
-                        application.applicant,
-                        10,
-                        8,
-                      )}
-                    </strong>
+                    <span className="step">FUND & CONTROL</span>
+                    <h2>Campaign treasury</h2>
                   </div>
 
-                  <StatusPill
-                    status={
-                      application.status
-                    }
-                  />
-                </div>
-
-                <div className="application-grid">
-                  <div>
-                    <span>
-                      DESCRIPTION
-                    </span>
-
-                    <p>
-                      {
-                        application.description
-                      }
-                    </p>
-                  </div>
-
-                  <div>
-                    <span>
-                      PROOF
-                    </span>
-
-                    <a
-                      href={
-                        application.proofUrl
-                      }
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {
-                        application.proofUrl
-                      }
-                    </a>
-                  </div>
-
-                  <div>
-                    <span>
-                      EVIDENCE
-                    </span>
-
-                    <a
-                      href={
-                        application.evidenceUrl
-                      }
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {
-                        application.evidenceUrl
-                      }
-                    </a>
+                  <div className="creator-chip">
+                    Creator · {short(campaign.creator, 8, 6)}
                   </div>
                 </div>
 
-                {application.reason && (
-                  <div className="result-box">
-                    <span>
-                      CONSENSUS REASON
-                    </span>
+                <div className="fund-row">
+                  <form onSubmit={fundCampaign} className="inline-form pro-inline-form fund-form">
+                    <input
+                      value={fundAmount}
+                      onChange={(event) => setFundAmount(event.target.value)}
+                      placeholder="GEN amount"
+                    />
 
-                    <p>
-                      {
-                        application.reason
-                      }
-                    </p>
-                  </div>
-                )}
-
-                {application.reviewedSnapshot && (
-                  <div className="result-box">
-                    <span>
-                      REVIEWED SNAPSHOT
-                    </span>
-
-                    <p>
-                      {
-                        application.reviewedSnapshot
-                      }
-                    </p>
-                  </div>
-                )}
-
-                <div className="settlement-box">
-                  <div>
-                    <span>
-                      RESERVED / CLAIMABLE
-                    </span>
-
-                    <strong>
-                      {pendingGen}{' '}
-                      GEN
-                    </strong>
-                  </div>
-
-                  {application.status ===
-                    'PENDING' && (
                     <button
-                      onClick={
-                        judgeApplication
-                      }
-                      disabled={
-                        busy !== ''
-                      }
+                      type="submit"
+                      disabled={busy !== '' || !account || !owner}
                     >
-                      {busy ===
-                      'judge'
+                      {busy === 'fund' ? 'FUNDING / VERIFYING…' : 'FUND CAMPAIGN'}
+                    </button>
+                  </form>
+
+                  {owner && (
+                    <button
+                      className="secondary"
+                      onClick={toggleCampaign}
+                      disabled={busy !== ''}
+                    >
+                      {campaign.active ? 'PAUSE CAMPAIGN' : 'ACTIVATE CAMPAIGN'}
+                    </button>
+                  )}
+
+                  {!owner && (
+                    <span className="inline-hint">
+                      Only the campaign creator can fund or change campaign status.
+                    </span>
+                  )}
+                </div>
+              </article>
+            )}
+          </section>
+        )}
+
+        {workspaceTab === 'proof' && campaign && (
+          <section className="workspace-view proof-view">
+            <div className="workspace-grid proof-main-grid">
+              <article className="panel pro-panel proof-sidebar">
+                <div className="panel-head compact-head">
+                  <div>
+                    <span className="step">APPLICANT IDENTITY</span>
+                    <h2>Wallet-bound proof</h2>
+                  </div>
+                </div>
+
+                <div className="proof-marker pro-proof-marker">
+                  <span>REQUIRED PROOF MARKER</span>
+
+                  <code>
+                    {requiredMarker || 'Connect applicant wallet to generate marker'}
+                  </code>
+
+                  <button
+                    type="button"
+                    onClick={copyMarker}
+                    disabled={!account}
+                  >
+                    COPY MARKER
+                  </button>
+                </div>
+
+                {owner ? (
+                  <div className="notice info compact-message">
+                    Campaign creator cannot submit an application.
+                    Switch to an applicant wallet.
+                  </div>
+                ) : (
+                  <div className="proof-ready-card">
+                    <span>APPLICANT READY</span>
+                    <strong>{account ? short(account, 9, 7) : 'Connect wallet'}</strong>
+                    <p>The proof marker automatically follows the selected MetaMask account.</p>
+                  </div>
+                )}
+
+                <div className="proof-guide">
+                  <span className="mini-label">3-STEP PROOF FLOW</span>
+                  <ol>
+                    <li>Paste a public contribution evidence URL.</li>
+                    <li>Copy the generated two-line proof page and publish it.</li>
+                    <li>Paste its public Raw URL into Proof / Binding URL.</li>
+                  </ol>
+                </div>
+              </article>
+
+              <article className="panel pro-panel">
+                <div className="panel-head compact-head">
+                  <div>
+                    <span className="step">SUBMISSION</span>
+                    <h2>Submit contribution evidence</h2>
+                  </div>
+                </div>
+
+                <form onSubmit={submitApplication} className="form-grid proof-form-grid">
+                  <label className="wide">
+                    <span>CONTRIBUTION DESCRIPTION</span>
+                    <textarea
+                      rows={3}
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                      placeholder="Describe the concrete implemented work..."
+                    />
+                  </label>
+
+                  <label className="wide">
+                    <span>CONTRIBUTION EVIDENCE URL</span>
+                    <input
+                      value={evidenceUrl}
+                      onChange={(event) => setEvidenceUrl(event.target.value)}
+                      placeholder="https://..."
+                    />
+                  </label>
+
+                  <div className="wide proof-page-box pro-proof-page-box">
+                    <div className="proof-page-head">
+                      <div>
+                        <span>READY-TO-PUBLISH PROOF PAGE</span>
+                        <p>Publish these two lines unchanged at a public HTTPS URL.</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={copyProofPage}
+                        disabled={!account || !evidenceUrl.trim()}
+                      >
+                        COPY PROOF PAGE
+                      </button>
+                    </div>
+
+                    <pre>
+                      {proofPageText ||
+                        `${requiredMarker || 'AIRJUDGE_PROOF:<campaign_id>:<applicant_wallet>'}\nevidence_url:<paste exact evidence URL above>`}
+                    </pre>
+                  </div>
+
+                  <label className="wide">
+                    <span>PROOF / BINDING URL</span>
+                    <input
+                      value={proofUrl}
+                      onChange={(event) => setProofUrl(event.target.value)}
+                      placeholder="https://gist.githubusercontent.com/.../raw/..."
+                    />
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={busy !== '' || !account || owner || !campaign.active}
+                  >
+                    {busy === 'submit' ? 'SUBMITTING / VERIFYING…' : 'SUBMIT EVIDENCE'}
+                  </button>
+                </form>
+              </article>
+            </div>
+          </section>
+        )}
+
+        {workspaceTab === 'review' && campaign && (
+          <section className="workspace-view review-view">
+            <article className="panel pro-panel application-loader">
+              <div className="panel-head compact-head">
+                <div>
+                  <span className="step">APPLICATION LOOKUP</span>
+                  <h2>Review & settlement</h2>
+                </div>
+
+                {application && <StatusPill status={application.status} />}
+              </div>
+
+              <div className="inline-form pro-inline-form">
+                <input
+                  value={lookupWallet}
+                  onChange={(event) => setLookupWallet(event.target.value)}
+                  placeholder="0x applicant wallet"
+                />
+
+                <button
+                  onClick={handleLoadApplication}
+                  disabled={busy !== ''}
+                >
+                  LOAD APPLICATION
+                </button>
+              </div>
+            </article>
+
+            {application ? (
+              <div className="workspace-grid review-main-grid">
+                <article className="panel pro-panel application-summary">
+                  <div className="panel-head compact-head">
+                    <div>
+                      <span className="step">APPLICATION</span>
+                      <h2>{short(application.applicant, 11, 8)}</h2>
+                    </div>
+                  </div>
+
+                  <div className="app-description-card">
+                    <span>DESCRIPTION</span>
+                    <p>{application.description}</p>
+                  </div>
+
+                  <div className="link-grid">
+                    <a href={application.proofUrl} target="_blank" rel="noreferrer">
+                      <span>PROOF</span>
+                      <strong>Open binding ↗</strong>
+                      <small>{short(application.proofUrl, 28, 18)}</small>
+                    </a>
+
+                    <a href={application.evidenceUrl} target="_blank" rel="noreferrer">
+                      <span>EVIDENCE</span>
+                      <strong>Open evidence ↗</strong>
+                      <small>{short(application.evidenceUrl, 28, 18)}</small>
+                    </a>
+                  </div>
+
+                  {application.reason && (
+                    <div className="result-box compact-result">
+                      <span>CONSENSUS REASON</span>
+                      <p>{application.reason}</p>
+                    </div>
+                  )}
+                </article>
+
+                <article className="panel pro-panel settlement-panel">
+                  <div className="panel-head compact-head">
+                    <div>
+                      <span className="step">SETTLEMENT</span>
+                      <h2>Reward state</h2>
+                    </div>
+                  </div>
+
+                  <div className="claim-metric">
+                    <span>RESERVED / CLAIMABLE</span>
+                    <strong>{pendingGen} GEN</strong>
+                  </div>
+
+                  {application.status === 'PENDING' && (
+                    <button
+                      className="full-action"
+                      onClick={judgeApplication}
+                      disabled={busy !== ''}
+                    >
+                      {busy === 'judge'
                         ? 'VALIDATORS RUNNING…'
                         : 'RUN GENLAYER ADJUDICATION'}
                     </button>
                   )}
 
-                  {BigInt(
-                    application.pendingWei ||
-                      '0',
-                  ) >
-                    0n && (
+                  {BigInt(application.pendingWei || '0') > 0n && (
                     <button
-                      onClick={
-                        withdraw
-                      }
+                      className="full-action"
+                      onClick={withdraw}
                       disabled={
                         busy !== '' ||
-                        account.toLowerCase() !==
-                          application.applicant.toLowerCase()
+                        account.toLowerCase() !== application.applicant.toLowerCase()
                       }
                     >
-                      {busy ===
-                      'withdraw'
+                      {busy === 'withdraw'
                         ? 'CLAIMING / VERIFYING…'
                         : `CLAIM ${pendingGen} GEN`}
                     </button>
                   )}
 
-                  {application.status ===
-                    'ELIGIBLE_PAID' && (
-                    <div className="paid">
+                  {application.status === 'ELIGIBLE_PAID' && (
+                    <div className="paid pro-paid">
                       ✓ REWARD CLAIMED
                     </div>
                   )}
-                </div>
+
+                  {application.reviewedSnapshot && (
+                    <div className="result-box snapshot-box">
+                      <span>REVIEWED SNAPSHOT</span>
+                      <p>{application.reviewedSnapshot}</p>
+                    </div>
+                  )}
+                </article>
+              </div>
+            ) : (
+              <div className="empty-state large-empty">
+                Load an applicant wallet to inspect the adjudication and settlement state.
               </div>
             )}
           </section>
         )}
       </main>
 
-      <footer>
-        <span>
-          AIRJUDGE V3 / GENLAYER STUDIONET
-        </span>
+      <footer className="pro-footer">
+        <span>AIRJUDGE V3 / GENLAYER STUDIONET</span>
 
         <span>
           {contractConfigured
-            ? short(
-                CONTRACT_ADDRESS,
-                10,
-                8,
-              )
+            ? short(CONTRACT_ADDRESS, 10, 8)
             : 'CONTRACT NOT CONFIGURED'}
         </span>
       </footer>

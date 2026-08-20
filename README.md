@@ -264,9 +264,15 @@ Campaign creation, loading and funding.
 
 Native GEN pool / reserved / available accounting display.
 
-Campaign-and-wallet-specific required proof marker.
+Campaign-and-wallet-specific required proof marker with live MetaMask account synchronization.
+
+Ready-to-publish two-line proof page generator that binds the exact evidence URL.
 
 Separate Proof URL and Evidence URL fields.
+
+Wrong-network detection and explicit GenLayer Studio (61999) switching.
+
+Readable wallet/provider errors instead of `[object Object]`.
 
 HTTPS URL validation and normalized pasted input.
 
@@ -353,74 +359,24 @@ The frontend distinguishes a failure before a transaction hash isreturned from a
 
 Quick Reviewer Test
 
-This is the shortest end-to-end path for verifying AirJudge V3.
+This is the safest currently documented end-to-end path. It requires two wallets because the deployed contract does not allow the campaign creator to apply to the same campaign.
 
-Connect a creator wallet.
-
-Create a campaign with qualitative eligibility criteria and a 5GEN reward.
-
-Fund the campaign with 10 GEN.
-
-Switch to a different applicant wallet and load the campaign.
-
-Copy the generated proof marker:
+1. Connect a creator wallet. AirJudge will request GenLayer Studio (chain 61999) if MetaMask is on another network.
+2. Create a campaign with qualitative criteria and a small reward, then fund it with enough native StudioNet GEN.
+3. Switch MetaMask to a different applicant wallet. The wallet button and required proof marker must update automatically to the new address.
+4. Load the campaign. Publish the contribution at a public HTTPS evidence URL.
+5. Paste that exact evidence URL into AirJudge. Click COPY PROOF PAGE. The copied content contains both required lines:
 
 AIRJUDGE_PROOF:<campaign_id>:<applicant_wallet>
-
-Publish a public HTTPS evidence page containing a contribution thatsatisfies the campaign criteria.
-
-Publish a separate public proof page containing:
-
-AIRJUDGE_PROOF:<campaign_id>:<applicant_wallet>
-
 evidence_url:<exact_evidence_url>
 
-Submit the application with:
+6. Publish those two lines unchanged at a public HTTPS proof page. A publicly fetchable GitHub Gist Raw URL was used successfully in the V3 tests. Paste that URL into Proof / Binding URL.
+7. Submit the application once. Expected initial state: PENDING.
+8. Run GenLayer adjudication once. If consensus returns ELIGIBLE_RESERVED, claim the reward from the applicant wallet. Expected final state: ELIGIBLE_PAID.
 
-Contribution Description
+Important: after a transaction hash exists, do not blindly submit the same action again because RPC monitoring is slow or temporarily unavailable. Reload campaign/application state first.
 
-Proof / Binding URL
-
-Contribution Evidence URL
-
-Run GenLayer adjudication once.
-
-If consensus returns ELIGIBLE_RESERVED, claim the 5 GEN rewardfrom the applicant wallet.
-
-Expected Flow
-
-PENDING
-→ provenance verification
-→ consensus evidence snapshot
-→ AI adjudication
-→ ELIGIBLE_RESERVED
-→ withdraw()
-→ ELIGIBLE_PAID
-
-Expected Accounting
-
-Before adjudication:
-
-Pool       10 GEN
-Reserved    0 GEN
-Available  10 GEN
-
-After an eligible verdict:
-
-Pool       10 GEN
-Reserved    5 GEN
-Available   5 GEN
-Claimable   5 GEN
-
-After claim:
-
-Pool        5 GEN
-Reserved    0 GEN
-Available   5 GEN
-Claimable   0 GEN
-Status      ELIGIBLE_PAID
-
-Important: Run adjudication and claim only once. If StudioNetreturns a temporary RPC or monitoring error after a transaction hashhas already been produced, reload the application/campaign stateinstead of submitting the transaction again.
+Project Explorer note: the lowest-friction listing should use a pre-created, pre-funded demo campaign so a reviewer needs only one applicant wallet. Do not publish a demo campaign ID in the listing until that exact campaign and the exact written steps have been tested end-to-end with a fresh wallet.
 
 Testing Guide
 
@@ -428,7 +384,7 @@ Prerequisites
 
 MetaMask
 
-GenLayer StudioNet configured in the wallet
+MetaMask (AirJudge can add/switch GenLayer Studio chain 61999)
 
 Native StudioNet GEN for campaign funding and transactions
 
@@ -512,7 +468,7 @@ and the campaign's pool/reserved accounting updates accordingly.
 
 RPC Notes
 
-GenLayer StudioNet may occasionally rate-limit RPC requests or returntransient network errors.
+GenLayer StudioNet may occasionally rate-limit RPC requests or return transient network errors. Browser reads use the same-origin `/genlayer-rpc` proxy on both Vite and Vercel.
 
 Examples include:
 
@@ -574,7 +530,7 @@ cd AirJudge
 npm install
 npm run dev
 
-Update src/lib/config.ts with the deployed contract address and RPCconfiguration if you deploy a new instance.
+Set `VITE_CONTRACT_ADDRESS` if you deploy a new instance. Browser RPC reads use the same-origin `/genlayer-rpc` proxy configured by Vite/Vercel.
 
 To deploy a new AirJudge contract, deploy contracts/airjudge.pythrough GenLayer Studio using the appropriate consensus configuration.
 
@@ -590,3 +546,100 @@ onchain applicant identity
 + native onchain settlement
 
 The same architecture can support contribution rewards, granteligibility, community incentive programs, qualitative milestonerewards, and other systems where subjective public evidence must lead toenforceable onchain outcomes.
+
+
+Explorer readiness fixes
+
+The current frontend adds the reviewer-safety fixes identified before Project Explorer submission: MetaMask account/network listeners, explicit StudioNet chain handling before writes, normalized EIP-1193 errors, a complete two-line proof-page copier, pinned `genlayer-js@1.1.8`, and same-origin RPC proxying. The deployed contract is unchanged.
+
+These source changes are not marked as browser-regression PASS until the checklist in `TESTING.md` is run on the final deployment.
+
+
+## Explorer End-to-End Verification — Aug 20, 2026
+
+A fresh reviewer-style flow was completed locally against the unchanged StudioNet contract.
+
+Test campaign:
+
+```text
+Campaign ID: airjudge-test-01
+Campaign:    AirJudge Test
+Reward:      1 GEN
+Pool funded: 10 GEN
+Criteria:    Applicant must provide public proof of contributing to a GenLayer project.
+```
+
+Observed flow:
+
+```text
+1. Creator created and loaded the campaign.
+2. Creator funded the pool with 10 GEN.
+3. Wallet was changed in MetaMask without reloading the page.
+   → UI account updated immediately.
+   → proof marker updated to the new applicant wallet.
+4. Applicant submitted:
+   → public Proof / Binding URL containing the generated two-line binding
+   → public Contribution Evidence URL
+5. Application status became PENDING.
+6. GenLayer adjudication reached ELIGIBLE_RESERVED.
+   → 1 GEN reserved / claimable
+   → campaign available balance moved from 10 GEN to 9 GEN
+7. Applicant claimed the reward.
+   → claimable returned to 0 GEN
+   → UI displayed REWARD CLAIMED
+```
+
+Final result:
+
+```text
+CREATE / LOAD CAMPAIGN       PASS
+FUND CAMPAIGN                PASS
+ACCOUNT CHANGE SYNC          PASS
+PROOF MARKER REBIND          PASS
+TWO-LINE PROOF PAGE          PASS
+SUBMIT APPLICATION           PASS
+GENLAYER ADJUDICATION        PASS
+ELIGIBLE_RESERVED            PASS
+CLAIM 1 GEN                  PASS
+REWARD CLAIMED               PASS
+```
+
+This verifies the complete reviewer path through the frontend and the existing deployed contract.
+
+
+## Compact Professional UI
+
+The frontend is organized into three workflow tabs:
+
+```text
+01 Campaign
+02 Proof & Submit
+03 Review & Claim
+```
+
+A persistent summary strip keeps campaign reward, pool, available balance, and application status visible without requiring a long scroll. Long reviewed snapshots are contained in a scrollable panel.
+
+The visual layer uses a brighter purple/navy system, glass panels, subtle ambient glows, tab transitions, hover lift, button glow, and reduced-motion support.
+
+This redesign is frontend-only. Contract logic, wallet synchronization, chain handling, RPC proxy behavior, proof binding, adjudication, and settlement logic are unchanged.
+
+
+## Brighter UI polish
+
+The professional workspace was brightened further for better first-screen readability:
+- brighter navy/purple background;
+- lighter cards and form surfaces;
+- stronger active-tab contrast;
+- more visible disabled workflow tabs;
+- reduced hero height;
+- tighter form spacing;
+- brighter borders and glow states.
+
+This is a visual-only CSS refinement.
+
+
+## GenLayer branding
+
+The frontend header includes the official GenLayer white logo on the dark interface as a
+small "Built on GenLayer" lockup. The logo asset is loaded from GenLayer's official brand
+asset URL and is displayed without recoloring or distortion.
