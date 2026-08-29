@@ -294,6 +294,14 @@ function App() {
     setCreateReward,
   ] = useState('5')
 
+  // Optional GEN sent with create_campaign. Empty or 0 keeps the campaign
+  // unfunded at creation, which is how it behaved before create_campaign
+  // became payable.
+  const [
+    createFunding,
+    setCreateFunding,
+  ] = useState('')
+
   const [
     fundAmount,
     setFundAmount,
@@ -602,6 +610,19 @@ function App() {
           )
         }
 
+        const initialFundingWei =
+          createFunding.trim() === ''
+            ? 0n
+            : parseGenToWei(
+                createFunding,
+              )
+
+        if (initialFundingWei < 0n) {
+          throw new Error(
+            'Initial funding cannot be negative.',
+          )
+        }
+
         const result =
           await airJudge.createCampaign(
             account,
@@ -634,6 +655,58 @@ function App() {
         await refreshCampaignAfterWrite(
           createId.trim(),
         )
+
+        // ------------------------------------------------------------
+        // Optional second leg: fund the campaign we just created.
+        //
+        // create_campaign is not payable, so funding is its own
+        // transaction. Chaining it here means the creator signs twice
+        // but drives one action, which is the behaviour the Explorer
+        // review asked for. It runs only after the create is confirmed
+        // onchain - firing fund_campaign against a campaign that does
+        // not exist yet would revert.
+        //
+        // If this leg fails, the campaign still exists. Saying so
+        // explicitly matters: a user who reads a generic failure will
+        // try to create again and hit "campaign already exists".
+        // ------------------------------------------------------------
+        if (initialFundingWei > 0n) {
+          setNoticeKind('info')
+          setNotice(
+            'Campaign created. Confirm the second transaction to fund it.',
+          )
+
+          try {
+            const funded =
+              await airJudge.fundCampaign(
+                account,
+                createId.trim(),
+                initialFundingWei,
+              )
+
+            await refreshCampaignAfterWrite(
+              createId.trim(),
+            )
+
+            setNoticeKind('success')
+            setNotice(
+              `Campaign created and funded. Funding transaction ${short(
+                funded.hash,
+              )}.`,
+            )
+            setCreateFunding('')
+            return
+          } catch (fundError) {
+            setNoticeKind('error')
+            setNotice(
+              `Campaign "${createId.trim()}" was created successfully, but the funding transaction did not go through: ${reportError(
+                'fund',
+                fundError,
+              )} Do not create it again - use Fund campaign below to add GEN.`,
+            )
+            return
+          }
+        }
 
         setNoticeKind(
           'success',
@@ -1663,6 +1736,20 @@ function App() {
                     />
                   </label>
 
+                  <label>
+                    <span>FUND NOW / GEN — OPTIONAL</span>
+                    <input
+                      value={createFunding}
+                      onChange={(event) => setCreateFunding(event.target.value)}
+                      placeholder="0"
+                    />
+                    <small>
+                      Funds the campaign right after it is created, as a second
+                      signature. Leave empty to create it unfunded and top up
+                      later.
+                    </small>
+                  </label>
+
                   <label className="wide">
                     <span>ELIGIBILITY CRITERIA</span>
                     <textarea
@@ -1677,7 +1764,11 @@ function App() {
                     type="submit"
                     disabled={busy !== '' || !account}
                   >
-                    {busy === 'create' ? 'CREATING / VERIFYING…' : 'CREATE CAMPAIGN'}
+                    {busy === 'create'
+                      ? 'CREATING / VERIFYING…'
+                      : createFunding.trim() === ''
+                        ? 'CREATE CAMPAIGN'
+                        : 'CREATE & FUND CAMPAIGN'}
                   </button>
                 </form>
               </article>
