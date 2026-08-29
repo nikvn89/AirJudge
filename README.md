@@ -555,6 +555,31 @@ The current frontend adds the reviewer-safety fixes identified before Project Ex
 These source changes are not marked as browser-regression PASS until the checklist in `TESTING.md` is run on the final deployment.
 
 
+
+## Funding model
+
+`create_campaign` records the promise; `fund_campaign` moves the money:
+
+```python
+@gl.public.write            def create_campaign(id, name, criteria, reward_wei)
+@gl.public.write.payable    def fund_campaign(id)
+```
+
+`reward_wei` is the reward promised **per eligible applicant**
+(`campaign_reward_wei`) and is recorded whether or not any GEN has arrived.
+`campaign_pool_wei` is the balance those rewards are actually paid from. Keeping
+them apart lets a campaign exist while unfunded — a creator can publish criteria
+and let people read them before committing money — and means every GEN that
+enters a campaign passes through one auditable function.
+
+**Funding at creation time.** Fill in the optional *FUND NOW / GEN* field on the
+create form and the button becomes **CREATE & FUND CAMPAIGN**: the app creates
+the campaign, waits for confirmation, then funds it. Two signatures, one action.
+Leave the field empty for an unfunded campaign you top up later.
+
+Full flow, the two-stage consensus design, and the deterministic/semantic
+boundary: [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Explorer End-to-End Verification — Aug 20, 2026
 
 A fresh reviewer-style flow was completed locally against the unchanged StudioNet contract.
