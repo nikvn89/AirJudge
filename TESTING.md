@@ -281,3 +281,70 @@ The professional compact UI is a presentation-only refactor. Before publishing t
 ```
 
 The previously completed AirJudge contract E2E flow remains the functional baseline; do not claim the new UI deployment itself as verified until these checks are run.
+
+---
+
+# Milestone v1 Runtime Evidence — Create & Fund
+
+Date: 2026-09-07
+
+The milestone-specific create-and-fund path was re-tested on the live dApp against the unchanged StudioNet contract `0x29c49872d34361FdC72C0528f7fCeB97F1eeda95`.
+
+## Case A — Successful create + initial funding
+
+Campaign:
+
+```text
+milestone-cf-success-0907
+```
+
+Observed post-state after the dApp completed `create_campaign` and then `fund_campaign`:
+
+```text
+status    = ACTIVE
+reward    = 0.001 GEN
+pool      = 0.01 GEN
+reserved  = 0 GEN
+available = 0.01 GEN
+```
+
+Result: **PASS**
+
+Evidence: `docs/evidence/milestone-v1-create-fund-success.png`
+
+## Case B — Funding request rejected after successful creation
+
+Campaign:
+
+```text
+milestone-cf-fail-0907-b
+```
+
+Observed behavior:
+
+```text
+create_campaign  = succeeded
+fund_campaign    = not submitted (wallet rejection, code 4001)
+```
+
+Observed post-state:
+
+```text
+status    = ACTIVE
+reward    = 0.001 GEN
+pool      = 0 GEN
+reserved  = 0 GEN
+available = 0 GEN
+```
+
+The dApp explicitly stated that the campaign had already been created, told the user not to recreate it, and kept the standalone **Fund Campaign** recovery action available.
+
+Result: **PASS**
+
+Evidence: `docs/evidence/milestone-v1-funding-failure.png`
+
+## Milestone v1 evidence conclusion
+
+The two runtime cases demonstrate the exact reviewer-requested outcomes: successful create-and-fund, and preserved campaign state with a clear recovery path when the second funding wallet request is rejected after creation.
+
+See `MILESTONE_1_EVIDENCE.md` for the concise evidence bundle.

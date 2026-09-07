@@ -47,6 +47,15 @@ campaign keeps its state.
 
 - `CHANGELOG.md` — this file.
 
+### Runtime evidence — 2026-09-07
+
+The milestone flow was exercised on the live dApp in both requested outcomes:
+
+- **Create + fund success:** campaign `milestone-cf-success-0907` reached `ACTIVE` with `Pool = 0.01 GEN` and `Available = 0.01 GEN`.
+- **Funding not submitted after creation:** campaign `milestone-cf-fail-0907-b` remained `ACTIVE` with `Pool = 0 GEN` after the user rejected the second wallet request (`code 4001`); the UI preserved the campaign and directed the user to **Fund Campaign**.
+
+See [`MILESTONE_1_EVIDENCE.md`](MILESTONE_1_EVIDENCE.md) for the before/after runtime evidence screenshots and exact observed states.
+
 ### Why the contract was not made payable
 
 The underlying need — a creator who already knows the budget should not have to
