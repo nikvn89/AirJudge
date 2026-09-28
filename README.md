@@ -61,7 +61,7 @@ python3 tests/mutation_check.py
 sha256sum contracts/airjudge.py
 ```
 
-Direct Mode boundaries and mutation history are in [`tests/README.md`](tests/README.md). Runtime transaction evidence is in [`TESTING.md`](TESTING.md); unexecuted checks are explicitly marked `NOT RUN`.
+Direct Mode boundaries and mutation history are in [`tests/README.md`](tests/README.md). The complete fresh-deployment transaction matrix, native transfer hashes, and screenshot index are in [`TESTING.md`](TESTING.md).
 
 ## Configure the final frontend
 

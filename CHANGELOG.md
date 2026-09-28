@@ -24,6 +24,7 @@
 - Added 25 Direct Mode tests against the production contract, including a contract-driven Hypothesis accounting property.
 - Added 22 one-change mutants; final mutation score is 100% killed.
 - Added pinned Python test dependencies, `package-lock.json`, two-job GitHub Actions CI, `SECURITY.md`, and explicit test-boundary documentation.
+- Completed a fresh StudioNet lifecycle: funded `3 GEN`, reserved `1 GEN`, reclaimed `2 GEN`, then paid the protected `1 GEN` reward. Both active-campaign reclaim and double reclaim reverted as designed. Full hashes and screenshots are recorded in `TESTING.md`.
 
 Immutable comparison after the final commit is pushed:
 

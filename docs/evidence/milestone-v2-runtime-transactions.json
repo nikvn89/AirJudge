@@ -1,0 +1,26 @@
+{
+  "network": "StudioNet 61999",
+  "contract": "0x3d5f7C9E1ED2847EB61FE773D9f33b93c46cc2B1",
+  "campaign_id": "airjudge-v12-reclaim-test",
+  "creator": "0x6276095FAEA15108740445ff277fdA8c304657F4",
+  "approved_applicant": "0x146e44881d35814bA582D265AF5b97ef2695ec8e",
+  "transactions": {
+    "deploy": "0x6205cf355d42efd66382f2979d4f583fe6d5c78671a34de47d8754f4eacf30cd",
+    "create_campaign": "0x8d9fc35b97b4567b09912d7540bdb0c7b3cd58f86190c410cecd69a6c3311794",
+    "fund_campaign_3_gen": "0xa0d73b1892b2dbce29479a35d51830752e9d2b55a9e6e2e6de23626df204800a",
+    "submit_approved_application": "0x510f9bed9e47a47d72c1bdd3a7331c552afdc81298bbb5c2a756f805a0abf34b",
+    "judge_eligible_reserved": "0x96bd663cdb1977e032cfa25186a63ee038af6d60b0b6f6f1c402b3abfcb1c39a",
+    "active_reclaim_reverted": "0x4c2abf172028e2619e47d964b688c9885b33ee4af241110f5cb4e7aa02847ff6",
+    "pause_campaign": "0xcea867dc2cd08cb595075702a55a837be67249944220d8269e038617efaf8bb6",
+    "reclaim_unused_pool": "0xc3b9e359b4c2b69dabd8e56c644646e549a4809cfefa37450c9f89d948d722d3",
+    "creator_transfer_2_gen": "0x3a59a607fcbf9cfa7f25b0c1cb8fc2afea46e5b1f116810ed5c737b27a4a1c8c",
+    "withdraw": "0xf2e0d494cde528534e073c779c1f09685e8a3a563b8879a061dd15f5fae49b5d",
+    "applicant_transfer_1_gen": "0x836ad2b75f5b8642d3bc5a6bd2bf02026fedad685b0c60f25c49762c3067ece0",
+    "second_reclaim_reverted": "0x47b7cfebc5b02c556c70a3d1fd9ab84fc508d20f70d5cec32235700dd48ca80e"
+  },
+  "observed_states_gen": {
+    "before_reclaim": { "pool": 3, "reserved": 1, "available": 2 },
+    "after_reclaim": { "pool": 1, "reserved": 1, "available": 0 },
+    "after_withdraw": { "pool": 0, "reserved": 0, "available": 0 }
+  }
+}
