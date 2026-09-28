@@ -384,7 +384,7 @@ a {
 
 .summary-strip {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   margin: 0 0 13px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -809,6 +809,15 @@ button.secondary:hover:not(:disabled) {
 .inline-hint {
   color: #7e869a;
   font-size: 11px;
+}
+
+.reclaim-control {
+  display: grid;
+  gap: 5px;
+}
+
+.reclaim-button {
+  min-width: 196px;
 }
 
 .proof-sidebar {

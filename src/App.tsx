@@ -47,6 +47,7 @@ type Busy =
   | 'submit'
   | 'judge'
   | 'withdraw'
+  | 'reclaim'
   | 'toggle'
   | 'switch'
 
@@ -891,6 +892,96 @@ function App() {
         },
       )
 
+  const reclaimUnusedPool =
+    () =>
+      run(
+        'reclaim',
+        async () => {
+          if (
+            !account ||
+            !campaign
+          ) {
+            throw new Error(
+              'Connect wallet and load campaign first.',
+            )
+          }
+
+          if (!owner) {
+            throw new Error(
+              'Only the campaign creator can reclaim unused funds.',
+            )
+          }
+
+          if (campaign.active) {
+            throw new Error(
+              'Close the campaign first.',
+            )
+          }
+
+          const availableBefore = BigInt(
+            campaign.availableWei || '0',
+          )
+          const reservedBefore = BigInt(
+            campaign.reservedWei || '0',
+          )
+
+          if (availableBefore <= 0n) {
+            throw new Error(
+              'Nothing to reclaim.',
+            )
+          }
+
+          const result =
+            await airJudge.reclaimUnusedPool(
+              account,
+              campaign.id,
+            )
+
+          setNoticeKind('info')
+          setNotice(
+            result.monitoringWarning
+              ? `Reclaim transaction ${short(result.hash)} submitted. Verifying treasury state before allowing a retry…`
+              : `Reclaim transaction ${short(result.hash)} accepted. Verifying treasury state…`,
+          )
+
+          let verified = false
+
+          for (let i = 0; i < 5; i += 1) {
+            await sleep(i === 0 ? 2500 : 3000)
+
+            try {
+              const pool =
+                await airJudge.getCampaignPoolStatus(
+                  campaign.id,
+                )
+
+              if (
+                BigInt(pool.pool_wei || '0') === reservedBefore &&
+                BigInt(pool.reserved_wei || '0') === reservedBefore &&
+                BigInt(pool.available_wei || '0') === 0n
+              ) {
+                await loadCampaign(campaign.id)
+                verified = true
+                break
+              }
+            } catch {
+              // wait for accepted state to become readable
+            }
+          }
+
+          if (!verified) {
+            throw new Error(
+              `Transaction ${short(result.hash)} was submitted, but RPC verification is still unavailable. DO NOT reclaim again. Wait and press LOAD to verify the treasury.`,
+            )
+          }
+
+          setNoticeKind('success')
+          setNotice(
+            `${formatWei(availableBefore)} GEN reclaimed. Pool, Reserved, and Available were refreshed from accepted onchain state.`,
+          )
+        },
+      )
+
   const requiredMarker =
     useMemo(
       () => {
@@ -1596,6 +1687,11 @@ function App() {
           </div>
 
           <div>
+            <span>RESERVED</span>
+            <strong>{campaign ? `${formatWei(campaign.reservedWei)} GEN` : '—'}</strong>
+          </div>
+
+          <div>
             <span>AVAILABLE</span>
             <strong>{campaign ? `${formatWei(campaign.availableWei)} GEN` : '—'}</strong>
           </div>
@@ -1811,6 +1907,32 @@ function App() {
                     >
                       {campaign.active ? 'PAUSE CAMPAIGN' : 'ACTIVATE CAMPAIGN'}
                     </button>
+                  )}
+
+                  {owner && (
+                    <div className="reclaim-control">
+                      <button
+                        className="secondary reclaim-button"
+                        onClick={reclaimUnusedPool}
+                        disabled={
+                          busy !== '' ||
+                          campaign.active ||
+                          BigInt(campaign.availableWei || '0') <= 0n
+                        }
+                      >
+                        {busy === 'reclaim'
+                          ? 'RECLAIMING / VERIFYING…'
+                          : `RECLAIM ${formatWei(campaign.availableWei)} GEN`}
+                      </button>
+
+                      <span className="inline-hint">
+                        {campaign.active
+                          ? 'Close the campaign first.'
+                          : BigInt(campaign.availableWei || '0') > 0n
+                            ? 'Returns only Pool − Reserved to the creator.'
+                            : 'No unused pool is available to reclaim.'}
+                      </span>
+                    </div>
                   )}
 
                   {!owner && (
@@ -2074,7 +2196,7 @@ function App() {
       </main>
 
       <footer className="pro-footer">
-        <span>AIRJUDGE V3 / GENLAYER STUDIONET</span>
+        <span>AIRJUDGE V1.2 / GENLAYER STUDIONET</span>
 
         <span>
           {contractConfigured

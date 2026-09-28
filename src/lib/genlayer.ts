@@ -416,6 +416,16 @@ export const airJudge = {
       ],
     ),
 
+  reclaimUnusedPool: (
+    account: string,
+    campaignId: string,
+  ) =>
+    write(
+      account,
+      'reclaim_unused_pool',
+      [campaignId],
+    ),
+
   submitApplication: (
     account: string,
     campaignId: string,

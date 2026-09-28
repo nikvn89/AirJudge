@@ -1,102 +1,38 @@
 # Changelog
 
-All notable changes to AirJudge. Format follows [Keep a Changelog](https://keepachangelog.com/).
+## [1.2.0] — 2026-09-28
 
----
+### Contract changed — fresh deployment required
 
-## [1.1.0] — 2026-08-29 — One-action campaign funding + architecture docs
+- Added `reclaim_unused_pool(campaign_id)` for creators to recover `max(pool - reserved, 0)` after explicitly closing a campaign.
+- The method updates state before transfer, sets `pool = reserved`, and never changes the reserved amount.
+- Previous address: `0x29c49872d34361FdC72C0528f7fCeB97F1eeda95`.
+- Fresh v2 address: `0x3d5f7C9E1ED2847EB61FE773D9f33b93c46cc2B1`.
+- Deployment transaction: `0x6205cf355d42efd66382f2979d4f583fe6d5c78671a34de47d8754f4eacf30cd`.
+- Previous SHA-256: `5c7bb12a90f556209472390404e28331552237c793af31964fb4c5e9c5a814fe`.
+- v2 SHA-256: `156ed2a5906649bc3ba620d7be87afb488fbe9ed80058c30bc3bc761fa5c362c`.
+- Storage is not migrated. The previous deployment remains readable, and the frontend must be updated to the fresh address after deployment.
 
-Acts on the Project Explorer reviewer's note:
+### User-visible changes
 
-> *"If `create_campaign` is intended to receive native GEN funding directly upon
-> creation, please add `@gl.public.write(payable=True)` to the contract
-> function."*
+- Added a creator-only reclaim control with active/closed guidance and exact available amount.
+- Added Pool / Reserved / Available treasury visibility.
+- Re-reads accepted state after reclaim and warns against resubmission if monitoring is unavailable.
 
-**The contract is unchanged and there is no redeploy.**
-`0x29c49872d34361FdC72C0528f7fCeB97F1eeda95` stays live and every existing
-campaign keeps its state.
+### Verification infrastructure
 
-### Added
+- Added 25 Direct Mode tests against the production contract, including a contract-driven Hypothesis accounting property.
+- Added 22 one-change mutants; final mutation score is 100% killed.
+- Added pinned Python test dependencies, `package-lock.json`, two-job GitHub Actions CI, `SECURITY.md`, and explicit test-boundary documentation.
 
-- **Create & Fund in one action.** The create form carries an optional
-  **FUND NOW / GEN** field. Fill it in and the button becomes **CREATE & FUND
-  CAMPAIGN**: the app submits `create_campaign`, waits for it to be confirmed
-  on-chain, then submits `fund_campaign` for the amount entered. The creator
-  signs twice but drives one action, which is the outcome the note is asking
-  for.
+Immutable comparison after the final commit is pushed:
 
-  Leave the field empty and nothing changes — one transaction, unfunded
-  campaign, exactly as before.
+`https://github.com/nikvn89/AirJudge/compare/0c71578b2b992eb44e4d7b6d0b102dda772c8e8f...<NEW_40_CHARACTER_HEAD_SHA>`
 
-  Two properties of the sequence are deliberate:
+## [1.1.0] — Create & Fund
 
-  - The funding leg runs **only after the create is confirmed**. Firing
-    `fund_campaign` against a campaign that does not exist yet would revert.
-  - If the funding leg fails, the message says **the campaign was still
-    created**, names its id, and points at the standalone Fund control. A
-    generic failure would send the user back to create it again and straight
-    into `"campaign already exists"`.
-
-- **`ARCHITECTURE.md`** — the funding model, campaign lifecycle, the two-stage
-  consensus design, and the line between what the contract enforces
-  deterministically and what validators decide. None of this was written down
-  anywhere; `grep "fund_campaign" README.md` returned nothing before this
-  release, which is why the reviewer had to ask at all.
-
-- **README "Funding model" section.**
-
-- `CHANGELOG.md` — this file.
-
-### Runtime evidence — 2026-09-07
-
-The milestone flow was exercised on the live dApp in both requested outcomes:
-
-- **Create + fund success:** campaign `milestone-cf-success-0907` reached `ACTIVE` with `Pool = 0.01 GEN` and `Available = 0.01 GEN`.
-- **Funding not submitted after creation:** campaign `milestone-cf-fail-0907-b` remained `ACTIVE` with `Pool = 0 GEN` after the user rejected the second wallet request (`code 4001`); the UI preserved the campaign and directed the user to **Fund Campaign**.
-
-See [`MILESTONE_1_EVIDENCE.md`](MILESTONE_1_EVIDENCE.md) for the before/after runtime evidence screenshots and exact observed states.
-
-### Why the contract was not made payable
-
-The underlying need — a creator who already knows the budget should not have to
-come back for a second step — is real, and it is met above. What it does not
-require is a redeploy.
-
-`create_campaign` is deployed and live at the address on the listing, and the
-state of every existing campaign lives there. Redeploying moves the address and
-strands that state: a real cost, paid for a convenience the frontend delivers at
-zero risk.
-
-Keeping the value out of `create_campaign` also keeps one property worth having:
-every GEN that enters a campaign passes through `fund_campaign`, so there is a
-single function to audit for the accounting that guards reservation and
-settlement.
-
-If the contract is redeployed for some other reason, folding the value in is a
-two-line change worth making at that point — `gl.message.value` in place of
-`u256(0)` where the pool is initialised.
-
-### Two-stage consensus, documented for the first time
-
-| Stage | Question | Principle | Returns |
-|---|---|---|---|
-| 1 | Is this proof page bound to this campaign and this wallet? | `gl.eq_principle.strict_eq` | bare `bool` |
-| 2 | Does this contribution satisfy the campaign criteria? | `gl.eq_principle.prompt_non_comparative` | verdict + reason |
-
-`strict_eq` is used correctly here: stage 1's nondeterministic block returns one
-boolean, so the meaning is distilled before consensus sees it and every
-validator must land on the same value. Free-form reasoning appears only in stage
-2, which is scored against stated criteria rather than compared byte for byte.
-
-Failing stage 1 costs nothing — a bad binding never reaches semantic
-adjudication and never reserves value.
-
----
+Added an optional Fund Now amount to the campaign creation flow while keeping `create_campaign` and `fund_campaign` as separate contract transactions.
 
 ## [1.0.0] — Published release
 
-Contribution reward campaigns adjudicated by GenLayer validator consensus.
-Creators define qualitative eligibility criteria and fund a native GEN pool;
-applicants submit a public contribution plus a campaign-and-wallet-bound proof
-page; validators verify the binding and then judge the contribution against the
-criteria. Eligible results reserve a reward the applicant claims on-chain.
+Initial contribution reward campaign, adjudication, reservation, and applicant withdrawal flow.

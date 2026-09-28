@@ -264,6 +264,79 @@ class AirJudge(gl.Contract):
             current + amount
         )
 
+    @gl.public.write
+    def reclaim_unused_pool(
+        self,
+        campaign_id: str,
+    ) -> None:
+
+        if not self.campaign_exists.get(
+            campaign_id,
+            False,
+        ):
+            raise gl.vm.UserError(
+                "campaign does not exist"
+            )
+
+        sender = str(
+            gl.message.sender_address
+        )
+
+        creator = self.campaign_creator[
+            campaign_id
+        ]
+
+        if (
+            sender.lower()
+            != creator.lower()
+        ):
+            raise gl.vm.UserError(
+                "only campaign creator can reclaim pool"
+            )
+
+        if self.campaign_active[
+            campaign_id
+        ]:
+            raise gl.vm.UserError(
+                "close the campaign before reclaiming"
+            )
+
+        pool_wei = self.campaign_pool_wei.get(
+            campaign_id,
+            u256(0),
+        )
+
+        reserved_wei = (
+            self.campaign_reserved_wei.get(
+                campaign_id,
+                u256(0),
+            )
+        )
+
+        if pool_wei >= reserved_wei:
+            available_wei = (
+                pool_wei - reserved_wei
+            )
+        else:
+            available_wei = u256(0)
+
+        if available_wei == u256(0):
+            raise gl.vm.UserError(
+                "nothing to reclaim"
+            )
+
+        self.campaign_pool_wei[campaign_id] = (
+            reserved_wei
+        )
+
+        payout = NativePayout(
+            Address(creator)
+        )
+
+        payout.emit_transfer(
+            value=available_wei
+        )
+
     # =========================================================
     # APPLICATION
     # =========================================================

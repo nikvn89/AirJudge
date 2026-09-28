@@ -1,6 +1,6 @@
 export const CONTRACT_ADDRESS =
   (import.meta.env.VITE_CONTRACT_ADDRESS as `0x${string}` | undefined) ??
-  '0x29c49872d34361FdC72C0528f7fCeB97F1eeda95'
+  '0x3d5f7C9E1ED2847EB61FE773D9f33b93c46cc2B1'
 
 // Browser reads/state checks stay same-origin to avoid direct StudioNet CORS/rate-limit failures.
 export const STUDIO_RPC =

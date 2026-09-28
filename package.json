@@ -1,12 +1,13 @@
 {
   "name": "airjudge",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "python3 -m pytest tests/ -q"
   },
   "dependencies": {
     "genlayer-js": "1.1.8",
