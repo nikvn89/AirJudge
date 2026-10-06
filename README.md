@@ -8,7 +8,7 @@ Milestone v3 (contract v1.3) makes settlement fair at both ends: a reserved rewa
 
 - Network: GenLayer StudioNet, chain `61999`
 - GenVM SDK: `v0.2.16` (`py-genlayer` v0.2)
-- v1.3 address: ⟨v1.3 address⟩ — deployment transaction ⟨hash⟩
+- v1.3 address: [`0x8DFc1aFE0542bb399756fa9E5BA89992E7B53a85`](https://explorer-studio.genlayer.com/address/0x8DFc1aFE0542bb399756fa9E5BA89992E7B53a85) — deployment transaction [`0xbc7aff07…fe808d`](https://explorer-studio.genlayer.com/tx/0xbc7aff073743785d907957780eeed57f3e8c816124fd360f85d99327fffe808d)
 - v1.3 contract SHA-256: `1da8d4a99236446e586d74ef049a9e94d9c54e986ac5c5f46ccd267ceead42b0`
 - v1.2 address (previous, readable): `0x3d5f7C9E1ED2847EB61FE773D9f33b93c46cc2B1`
 - v2 Explorer: [`0x3d5f...cc2B1`](https://explorer-studio.genlayer.com/address/0x3d5f7C9E1ED2847EB61FE773D9f33b93c46cc2B1)
@@ -82,7 +82,7 @@ Direct Mode boundaries and mutation history are in [`tests/README.md`](tests/REA
 Set the v1.3 address in Vercel (and redeploy without the build cache, because Vite inlines the value at build time):
 
 ```text
-VITE_CONTRACT_ADDRESS=⟨v1.3 address⟩
+VITE_CONTRACT_ADDRESS=0x8DFc1aFE0542bb399756fa9E5BA89992E7B53a85
 ```
 
 Do not add `client.connect('studionet')`. Browser reads use the same-origin `/genlayer-rpc` proxy in `vercel.json`; MetaMask uses the public Studio RPC declared in `src/lib/config.ts`.

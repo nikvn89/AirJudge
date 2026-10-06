@@ -32,7 +32,7 @@
 - New views: `get_payout_window(campaign_id, applicant)` (status, pending wei, reserved
   and expiry day, today, `expired`, `reservable_now`), `get_contract_info()`,
   `normalize_evidence_url(url)`.
-- Contract SHA-256: `1da8d4a99236446e586d74ef049a9e94d9c54e986ac5c5f46ccd267ceead42b0`. Fresh address: ⟨v1.3 address⟩. Storage is not migrated; v1.2
+- Contract SHA-256: `1da8d4a99236446e586d74ef049a9e94d9c54e986ac5c5f46ccd267ceead42b0`. Fresh address: `0x8DFc1aFE0542bb399756fa9E5BA89992E7B53a85`. Storage is not migrated; v1.2
   stays readable at `0x3d5f7C9E1ED2847EB61FE773D9f33b93c46cc2B1`.
 
 ### User-visible changes
@@ -79,10 +79,6 @@
 - Added 22 one-change mutants; final mutation score is 100% killed.
 - Added pinned Python test dependencies, `package-lock.json`, two-job GitHub Actions CI, `SECURITY.md`, and explicit test-boundary documentation.
 - Completed a fresh StudioNet lifecycle: funded `3 GEN`, reserved `1 GEN`, reclaimed `2 GEN`, then paid the protected `1 GEN` reward. Both active-campaign reclaim and double reclaim reverted as designed. Full hashes and screenshots are recorded in `TESTING.md`.
-
-Immutable comparison after the final commit is pushed:
-
-`https://github.com/nikvn89/AirJudge/compare/0c71578b2b992eb44e4d7b6d0b102dda772c8e8f...<NEW_40_CHARACTER_HEAD_SHA>`
 
 ## [1.1.0] — Create & Fund
 

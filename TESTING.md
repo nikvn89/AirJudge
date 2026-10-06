@@ -2,23 +2,21 @@
 
 ## v1.3 — fresh StudioNet runtime (Milestone v3)
 
-⟨Fill from the StudioNet run, then delete this line.⟩
+Contract v1.3: [`0x8DFc1aFE0542bb399756fa9E5BA89992E7B53a85`](https://explorer-studio.genlayer.com/address/0x8DFc1aFE0542bb399756fa9E5BA89992E7B53a85) · deployment [`0xbc7aff07…fe808d`](https://explorer-studio.genlayer.com/tx/0xbc7aff073743785d907957780eeed57f3e8c816124fd360f85d99327fffe808d) — `FINALIZED / SUCCESS` · SHA-256 `1da8d4a99236446e586d74ef049a9e94d9c54e986ac5c5f46ccd267ceead42b0`.
 
-Contract v1.3: ⟨v1.3 address⟩ · deployment ⟨hash⟩ · SHA-256 `1da8d4a99236446e586d74ef049a9e94d9c54e986ac5c5f46ccd267ceead42b0`. Wallets: creator, applicant A, applicant B. Campaign `airjudge-v13-window-test`, reward `1 GEN`.
+Campaign `airjudge-v13-window-test`, reward `1 GEN`. Creator `0x6276095FAEA15108740445ff277fdA8c304657F4` · applicant A `0x037f58E33c1Ec8fdA272361E0aAC1e31054a1CDE` · applicant B `0x146e44881d35814bA582D265AF5b97ef2695ec8e`. Public evidence and wallet-proof pages: [`docs/evidence/v13-*.html`](./docs/evidence/), served at `https://nikvn89.github.io/AirJudge/evidence/`.
 
-| # | Wallet | Method | Expected observation | Tx | Status |
+| # | Wallet | Method | Observed on StudioNet (2026-10-06) | Tx | Status |
 |---:|---|---|---|---|---|
-| 1 | creator | `create_campaign` + `fund_campaign` 1 GEN | Pool / Reserved / Available = `1 / 0 / 1 GEN` (strings in `get_campaign_pool_status`) | ⟨tx⟩ ⟨tx⟩ | ⟨status⟩ |
-| 2 | A | `submit_application` + `judge_application` | `ELIGIBLE_RESERVED`; `get_payout_window` shows `expires_day = reserved_day + 30` | ⟨tx⟩ ⟨tx⟩ | ⟨status⟩ |
-| 3 | B | `submit_application` with A's evidence URL plus `?utm_source=x` | **reverted** `this evidence has already been submitted to this campaign` (v1.2 accepted it) | ⟨tx⟩ | ⟨status⟩ |
-| 4 | B | `submit_application` (own evidence) + `judge_application` | `ELIGIBLE_UNDERFUNDED`; `reservable_now = false` | ⟨tx⟩ ⟨tx⟩ | ⟨status⟩ |
-| 5 | B | `release_expired_reservation(campaign, A)` | **reverted** `claim window is still open` | ⟨tx⟩ | ⟨status⟩ |
-| 6 | B | `reserve_underfunded(campaign, B)` | **reverted** `campaign pool still cannot cover the reward` | ⟨tx⟩ | ⟨status⟩ |
-| 7 | creator | `fund_campaign` 1 GEN | `reservable_now = true` for B | ⟨tx⟩ | ⟨status⟩ |
-| 8 | A | `reserve_underfunded(campaign, B)` | B `ELIGIBLE_RESERVED`; `2 / 2 / 0 GEN` | ⟨tx⟩ | ⟨status⟩ |
-| 9 | B | `withdraw` | B receives `1 GEN` (native transfer hash recorded); `1 / 1 / 0 GEN` | ⟨tx⟩ | ⟨status⟩ |
+| 1 | creator | `create_campaign` + `fund_campaign` 1 GEN | Pool / Reserved / Available = `1 / 0 / 1 GEN` | [`0x82e9d7a1…7a03db`](https://explorer-studio.genlayer.com/tx/0x82e9d7a16844d4b839fea93a942a953814454c8494e33af28c43fa75297a03db) [`0x852bc098…de508d`](https://explorer-studio.genlayer.com/tx/0x852bc0983250b9215efd29f89a0cef4d7f4bbb5bd7564b6ffaac47e727de508d) | PASS |
+| 2 | A | `submit_application` + `judge_application` | `ELIGIBLE_RESERVED`; claim window "Claim by 2026-11-05 (UTC) — 30 days left"; `1 / 1 / 0 GEN` · [screenshot](./docs/evidence/milestone-v3-claim-window.png) | [`0x222fde20…85e3aa`](https://explorer-studio.genlayer.com/tx/0x222fde20b64eaab4f3b19e2226cd03712c1cdf81c753a0b4f3c0de3c7885e3aa) [`0xd74e2460…5aa726`](https://explorer-studio.genlayer.com/tx/0xd74e24600285cca27401182963f4e278aaf2488fe3232ba976852762525aa726) | PASS |
+| 3 | B | `is_evidence_used(campaign, A's evidence URL + "?utm_source=x")` before signing | The accepted-state read returned **true** for the variant (v1.2 keyed the raw URL and returned false); the app refused to submit, so no transaction was sent · [screenshot](./docs/evidence/milestone-v3-url-variant-blocked.png). The contract-side revert `this evidence has already been submitted to this campaign` is covered by `tests/test_v13_settlement.py` | read-only | PASS |
+| 4 | B | `submit_application` (own evidence) + `judge_application` | `ELIGIBLE_UNDERFUNDED`, "waiting for funds" (pool fully reserved) · [screenshot](./docs/evidence/milestone-v3-underfunded.png) | [`0x22430ee9…f8213f`](https://explorer-studio.genlayer.com/tx/0x22430ee9b8b22b01bcc89123c00f2b5d55fedcbaece85e5cc7772cfbb1f8213f) [`0x375f1ccf…46c893`](https://explorer-studio.genlayer.com/tx/0x375f1ccf0e7b1b5998017e483e2d98ed254a067e1fdfed148bc36269bb46c893) | PASS |
+| 5 | creator | `fund_campaign` 1 GEN | `2 / 1 / 1 GEN`; B now reservable | [`0x85046665…fa4e93`](https://explorer-studio.genlayer.com/tx/0x85046665f4e1649f447d66f363359ccb5bb420074511b61e007bfd8112fa4e93) | PASS |
+| 6 | A | `reserve_underfunded(campaign, B)` (called by a third party) | B `ELIGIBLE_RESERVED`, claim window starts; `2 / 2 / 0 GEN` · [screenshot](./docs/evidence/milestone-v3-late-reservation.png) | [`0xf6dd9ff6…39f807`](https://explorer-studio.genlayer.com/tx/0xf6dd9ff6c4f645b85c61693181f1713ad6a326c741754cbb31883843bc39f807) | PASS |
+| 7 | B | `withdraw` | B paid 1 GEN, `ELIGIBLE_PAID`; `1 / 1 / 0 GEN` · native transfer [`0x1ddcfc03…cc3501`](https://explorer-studio.genlayer.com/tx/0x1ddcfc03cbf86b536de1c201893b014c268c1a8d4d4a8e6ee145e9eecfcc3501) · [screenshot](./docs/evidence/milestone-v3-paid.png) | [`0x78a07602…fde597`](https://explorer-studio.genlayer.com/tx/0x78a0760223e33def873d5b3b07c977248b9dae202b40f67a0f0c7195c6fde597) | PASS |
 
-The 30-day release itself cannot be waited for in one session; the on-chain run proves the window is enforced (row 5) and the offline suite proves the release (`test_anyone_may_release_on_day_thirty_and_the_pool_is_untouched` and its mutants).
+The contract still holds 1 GEN, reserved for applicant A until 2026-11-05. The 30-day release itself and the two by-design reverts (`claim window is still open`, `campaign pool still cannot cover the reward`) are not repeated on StudioNet; they are covered by the Direct Mode suite (`test_anyone_may_release_on_day_thirty_and_the_pool_is_untouched` and its mutants).
 
 ## v1.3 — local gates
 
@@ -85,10 +83,3 @@ Required files under `docs/evidence/`:
 | `milestone-v2-active-reclaim-reverted.png` | Active-campaign reclaim protection | PASS |
 | `milestone-v2-second-reclaim-reverted.png` | Double-reclaim protection | PASS |
 
-## CI and immutable links
-
-- Green two-job CI run: `PENDING /actions/runs/<id>` (add after the final evidence commit)
-- Immutable compare: `https://github.com/nikvn89/AirJudge/compare/0c71578b2b992eb44e4d7b6d0b102dda772c8e8f...<NEW_40_CHARACTER_HEAD_SHA>`
-- Deep test evidence: `https://github.com/nikvn89/AirJudge/blob/<NEW_40_CHARACTER_HEAD_SHA>/TESTING.md`
-
-Only the GitHub-dependent placeholders remain. Replace them after uploading this final evidence package, then wait for both CI jobs to pass.
