@@ -660,6 +660,54 @@ export const airJudge = {
         ),
       ),
 
+  // v1.3 — deterministic settlement actions (no model call).
+  reserveUnderfunded: (
+    account: string,
+    campaignId: string,
+    applicant: string,
+  ) =>
+    write(
+      account,
+      'reserve_underfunded',
+      [campaignId, normalizeAddress(applicant)],
+    ),
+
+  releaseExpiredReservation: (
+    account: string,
+    campaignId: string,
+    applicant: string,
+  ) =>
+    write(
+      account,
+      'release_expired_reservation',
+      [campaignId, normalizeAddress(applicant)],
+    ),
+
+  // v1.3 — claim window of one application; null on a pre-1.3 deployment.
+  getPayoutWindow: async (
+    campaignId: string,
+    applicant: string,
+  ): Promise<PayoutWindow | null> => {
+    try {
+      const raw = String(
+        await read('get_payout_window', [campaignId, normalizeAddress(applicant)]),
+      )
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object' || !('status' in parsed)) return null
+      return {
+        status: String(parsed.status),
+        pendingWei: String(parsed.pending_wei ?? '0'),
+        reservedDay: Number(parsed.reserved_day ?? 0),
+        expiresDay: Number(parsed.expires_day ?? 0),
+        today: Number(parsed.today ?? 0),
+        expired: Boolean(parsed.expired),
+        reservableNow: Boolean(parsed.reservable_now),
+      }
+    } catch {
+      return null
+    }
+  },
+
   isEvidenceUsed: (
     campaignId: string,
     evidenceUrl: string,
@@ -672,6 +720,20 @@ export const airJudge = {
       ],
     ) as Promise<boolean>,
 }
+
+export type PayoutWindow = {
+  status: string
+  pendingWei: string
+  reservedDay: number
+  expiresDay: number
+  today: number
+  expired: boolean
+  reservableNow: boolean
+}
+
+// Day number (days since 1970-01-01, UTC) -> YYYY-MM-DD.
+export const dayToDate = (day: number) =>
+  new Date(day * 86_400_000).toISOString().slice(0, 10)
 
 export async function pollApplicationStatus(
   campaignId: string,

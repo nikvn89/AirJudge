@@ -1,5 +1,59 @@
 # Changelog
 
+## [1.3.0] — 2026-10-06 — Fair settlement: claim window, late reservation, one reward per contribution
+
+### Contract changed — fresh deployment required
+
+- **Claim window.** A reserved reward is held for its applicant for 30 days from the
+  transaction date that reserved it. After that, `release_expired_reservation(campaign_id,
+  applicant)` — callable by anyone — returns it to the campaign's available pool (status
+  `ELIGIBLE_EXPIRED`). The pool does not change; only the reservation is released. This
+  closes the limitation v1.2 left open in `SECURITY.md`: a reward approved for an
+  applicant who never withdraws was locked forever.
+- **Late reservation.** An application judged `ELIGIBLE_UNDERFUNDED` used to be a dead
+  end even after the creator added funds. `reserve_underfunded(campaign_id, applicant)` —
+  callable by anyone, no model call — reserves the reward as soon as the available pool
+  covers it, and starts the claim window.
+- **One reward per contribution.** The evidence replay key now uses a canonical identity
+  (host without `www.`, path without trailing slashes, lower case; scheme, query and
+  fragment ignored). In v1.2 `…/pull/12?x=1`, the `www.` form, an upper-case host, a
+  trailing slash or a `#fragment` each counted as unused evidence, so a second wallet could
+  bind its own proof page to a variant and be judged — and paid — for the same
+  contribution. The five variants are regression tests that fail on v1.2.
+- **Prompt fence.** The claim and the reviewed snapshot are stripped of `<CLAIM>`,
+  `</CLAIM>`, `<EVIDENCE>`, `</EVIDENCE>` in any letter case, to a fixed point. v1.2 used a
+  single case-sensitive `.replace()`, so `</claim>` or `<CL<CLAIM>AIM>` reached the
+  adjudication input intact.
+- **Exact wei in views.** `get_campaign_pool_status` returns decimal strings. JSON numbers
+  above 2^53 lose precision in a browser, and from 1000 GEN up they print as `1e+21`, which
+  the frontend's `BigInt()` cannot parse.
+- **Transaction clock.** Reservation days come from `gl.message_raw["datetime"]`, converted
+  by integer calendar arithmetic.
+- New views: `get_payout_window(campaign_id, applicant)` (status, pending wei, reserved
+  and expiry day, today, `expired`, `reservable_now`), `get_contract_info()`,
+  `normalize_evidence_url(url)`.
+- Contract SHA-256: `1da8d4a99236446e586d74ef049a9e94d9c54e986ac5c5f46ccd267ceead42b0`. Fresh address: ⟨v1.3 address⟩. Storage is not migrated; v1.2
+  stays readable at `0x3d5f7C9E1ED2847EB61FE773D9f33b93c46cc2B1`.
+
+### User-visible changes
+
+- Reserved rewards show their claim deadline and days left; an expired reservation shows a
+  **Release expired reservation** button to any connected wallet.
+- An eligible-but-underfunded application explains that it is waiting for funds and shows
+  **Reserve reward now** as soon as the pool can cover it.
+- New `ELIGIBLE_EXPIRED` state.
+- The production bundle is split into `react`, `genlayer` and `vendor` chunks (largest file
+  296 kB; the 500 kB warning is gone).
+
+### Verification
+
+- Direct Mode suite 25 → 46 tests (21 new in `tests/test_v13_settlement.py`), all on the
+  production contract with GenVM SDK v0.2.16.
+- Mutation matrix 22 → 38 one-change mutants, 38/38 killed. The first run left one
+  survivor (a fence mutant: no gap and a single pass); a cross-token rebuild case was added
+  and it is killed.
+- `genvm-linter lint` passes; `npm ci && npm run build` pass.
+
 ## [1.2.0] — 2026-09-28
 
 ### Contract changed — fresh deployment required

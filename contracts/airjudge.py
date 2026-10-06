@@ -15,6 +15,18 @@ class NativePayout:
         def emit_transfer(self, value: u256, /) -> None: ...
 
 
+CONTRACT_VERSION = "1.3.0"
+
+# A reserved reward is held for its applicant for this many days (counted from
+# the transaction date that reserved it). After that anyone may release it back
+# to the campaign's available pool.
+CLAIM_WINDOW_DAYS = 30
+
+# Markers that fence untrusted text in the adjudication input. They are stripped
+# from the claim and the snapshot to a fixed point, in any letter case.
+FENCE_TOKENS = ("<CLAIM>", "</CLAIM>", "<EVIDENCE>", "</EVIDENCE>")
+
+
 class AirJudge(gl.Contract):
 
     # =========================================================
@@ -67,8 +79,62 @@ class AirJudge(gl.Contract):
 
     pending_payouts: TreeMap[str, u256]
 
+    # v1.3: day number (days since 1970-01-01) on which a reward was reserved.
+    payout_reserved_day: TreeMap[str, u256]
+
     def __init__(self):
         pass
+
+    # =========================================================
+    # CLOCK (v1.3) — the transaction's committed datetime, by arithmetic
+    # =========================================================
+
+    def _today(self) -> int:
+        raw = str(gl.message_raw["datetime"])
+        if len(raw) < 10 or raw[4] != "-" or raw[7] != "-":
+            raise gl.vm.UserError("invalid transaction datetime")
+        y, m, d = int(raw[0:4]), int(raw[5:7]), int(raw[8:10])
+        y -= 1 if m <= 2 else 0
+        era = (y if y >= 0 else y - 399) // 400
+        yoe = y - era * 400
+        doy = (153 * (m + (-3 if m > 2 else 9)) + 2) // 5 + d - 1
+        doe = yoe * 365 + yoe // 4 - yoe // 100 + doy
+        return era * 146097 + doe - 719468
+
+    def _available_wei(self, campaign_id: str) -> u256:
+        pool_wei = self.campaign_pool_wei.get(campaign_id, u256(0))
+        reserved_wei = self.campaign_reserved_wei.get(campaign_id, u256(0))
+        if pool_wei >= reserved_wei:
+            return pool_wei - reserved_wei
+        return u256(0)
+
+    def _canonical_url(self, url: str) -> str:
+        # v1.3: one identity per page for replay protection. Scheme, a leading
+        # `www.`, the query string, the fragment, letter case and trailing slashes
+        # do not make a different piece of evidence.
+        value = url.strip().lower()
+        value = value.split("#")[0].split("?")[0]
+        if value.startswith("https://"):
+            value = value[8:]
+        elif value.startswith("http://"):
+            value = value[7:]
+        if value.startswith("www."):
+            value = value[4:]
+        while value.endswith("/"):
+            value = value[:-1]
+        return value
+
+    def _fence_strip(self, text: str) -> str:
+        cleaned = text
+        while True:
+            before = cleaned
+            for token in FENCE_TOKENS:
+                index = cleaned.upper().find(token)
+                while index >= 0:
+                    cleaned = cleaned[:index] + " " + cleaned[index + len(token):]
+                    index = cleaned.upper().find(token)
+            if cleaned == before:
+                return cleaned
 
     # =========================================================
     # INTERNAL HELPERS
@@ -93,7 +159,7 @@ class AirJudge(gl.Contract):
         return (
             campaign_id
             + "|"
-            + evidence_url.strip().lower()
+            + self._canonical_url(evidence_url)
         )
 
     def _proof_marker(
@@ -671,29 +737,11 @@ class AirJudge(gl.Contract):
         # STEP 3 — AI JUDGES THE CONSENSUS SNAPSHOT
         # =====================================================
 
-        safe_description = (
-            description
-            .replace(
-                "<CLAIM>",
-                "",
-            )
-            .replace(
-                "</CLAIM>",
-                "",
-            )
-        )
+        # v1.3: fixed-point, case-insensitive fence. A single case-sensitive
+        # .replace() let "<claim>" or "<CL<CLAIM>AIM>" through.
+        safe_description = self._fence_strip(description)
 
-        safe_snapshot = (
-            reviewed_snapshot
-            .replace(
-                "<EVIDENCE>",
-                "",
-            )
-            .replace(
-                "</EVIDENCE>",
-                "",
-            )
-        )
+        safe_snapshot = self._fence_strip(reviewed_snapshot)
 
         def get_input() -> str:
 
@@ -919,6 +967,10 @@ class AirJudge(gl.Contract):
                 key
             ] = reward_wei
 
+            self.payout_reserved_day[
+                key
+            ] = u256(self._today())
+
             self.application_status[
                 key
             ] = "ELIGIBLE_RESERVED"
@@ -1030,8 +1082,128 @@ class AirJudge(gl.Contract):
         )
 
     # =========================================================
+    # v1.3 — RESERVE A REWARD THAT WAS UNDERFUNDED WHEN JUDGED
+    # =========================================================
+
+    @gl.public.write
+    def reserve_underfunded(
+        self,
+        campaign_id: str,
+        applicant: str,
+    ) -> None:
+        # Deterministic, no model call: the verdict is already on chain. An
+        # eligible contributor judged while the pool was short is reserved as
+        # soon as the pool can cover the reward. Anyone may trigger it.
+
+        if not self.campaign_exists.get(campaign_id, False):
+            raise gl.vm.UserError("campaign does not exist")
+
+        key = self._application_key(campaign_id, applicant)
+
+        if not self.application_exists.get(key, False):
+            raise gl.vm.UserError("application does not exist")
+
+        if self.application_status[key] != "ELIGIBLE_UNDERFUNDED":
+            raise gl.vm.UserError("application is not waiting for funds")
+
+        reward_wei = self.campaign_reward_wei.get(campaign_id, u256(0))
+
+        if self._available_wei(campaign_id) < reward_wei:
+            raise gl.vm.UserError("campaign pool still cannot cover the reward")
+
+        reserved_wei = self.campaign_reserved_wei.get(campaign_id, u256(0))
+        self.campaign_reserved_wei[campaign_id] = reserved_wei + reward_wei
+        self.pending_payouts[key] = reward_wei
+        self.payout_reserved_day[key] = u256(self._today())
+        self.application_status[key] = "ELIGIBLE_RESERVED"
+
+    # =========================================================
+    # v1.3 — RELEASE A RESERVATION NOBODY CLAIMED IN TIME
+    # =========================================================
+
+    @gl.public.write
+    def release_expired_reservation(
+        self,
+        campaign_id: str,
+        applicant: str,
+    ) -> None:
+        # A reserved reward is held for CLAIM_WINDOW_DAYS. After that anyone may
+        # return it to the campaign's available pool, where it can be reserved
+        # for another eligible contributor or reclaimed by the creator once the
+        # campaign is closed. The pool itself does not change.
+
+        if not self.campaign_exists.get(campaign_id, False):
+            raise gl.vm.UserError("campaign does not exist")
+
+        key = self._application_key(campaign_id, applicant)
+
+        if not self.application_exists.get(key, False):
+            raise gl.vm.UserError("application does not exist")
+
+        if self.application_status[key] != "ELIGIBLE_RESERVED":
+            raise gl.vm.UserError("no reserved reward to release")
+
+        reserved_day = int(self.payout_reserved_day.get(key, u256(0)))
+
+        if self._today() < reserved_day + CLAIM_WINDOW_DAYS:
+            raise gl.vm.UserError("claim window is still open")
+
+        amount_wei = self.pending_payouts.get(key, u256(0))
+        reserved_wei = self.campaign_reserved_wei.get(campaign_id, u256(0))
+
+        if reserved_wei < amount_wei:
+            raise gl.vm.UserError("reserved payout invariant violated")
+
+        self.pending_payouts[key] = u256(0)
+        self.campaign_reserved_wei[campaign_id] = reserved_wei - amount_wei
+        self.application_status[key] = "ELIGIBLE_EXPIRED"
+
+    # =========================================================
     # READ METHODS
     # =========================================================
+
+    @gl.public.view
+    def get_contract_info(self) -> str:
+        return json.dumps({
+            "contract_name": "AirJudge",
+            "version": CONTRACT_VERSION,
+            "claim_window_days": CLAIM_WINDOW_DAYS,
+            "clock_source": "transaction_datetime",
+            "evidence_identity": "host without www + path without trailing slash, lower case; scheme, query and fragment ignored",
+        })
+
+    @gl.public.view
+    def get_payout_window(
+        self,
+        campaign_id: str,
+        applicant: str,
+    ) -> str:
+        key = self._application_key(campaign_id, applicant)
+        if not self.application_exists.get(key, False):
+            return "{}"
+        status = self.application_status[key]
+        today = self._today()
+        reserved_day = int(self.payout_reserved_day.get(key, u256(0)))
+        has_window = status == "ELIGIBLE_RESERVED"
+        return json.dumps({
+            "status": status,
+            "pending_wei": str(int(self.pending_payouts.get(key, u256(0)))),
+            "reserved_day": reserved_day if has_window else 0,
+            "expires_day": reserved_day + CLAIM_WINDOW_DAYS if has_window else 0,
+            "today": today,
+            "expired": has_window and today >= reserved_day + CLAIM_WINDOW_DAYS,
+            "reservable_now": status == "ELIGIBLE_UNDERFUNDED"
+            and self._available_wei(campaign_id) >= self.campaign_reward_wei.get(campaign_id, u256(0)),
+        })
+
+    @gl.public.view
+    def normalize_evidence_url(
+        self,
+        evidence_url: str,
+    ) -> str:
+        if len(evidence_url) > 512:
+            return ""
+        return self._canonical_url(evidence_url)
 
     @gl.public.view
     def get_required_proof_marker(
@@ -1133,16 +1305,18 @@ class AirJudge(gl.Contract):
 
             available_wei = u256(0)
 
+        # v1.3: wei amounts as decimal strings. JSON numbers above 2^53 lose
+        # precision in a browser, and amounts from 1000 GEN up print as "1e+21".
         return json.dumps({
-            "pool_wei": int(
+            "pool_wei": str(int(
                 pool_wei
-            ),
-            "reserved_wei": int(
+            )),
+            "reserved_wei": str(int(
                 reserved_wei
-            ),
-            "available_wei": int(
+            )),
+            "available_wei": str(int(
                 available_wei
-            ),
+            )),
         })
 
     @gl.public.view

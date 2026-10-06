@@ -21,8 +21,11 @@ available = max(pool - reserved, 0)
 - Applicant withdrawal reduces pending, `reserved`, and `pool` by the same reward.
 - Creator reclaim is allowed only while inactive and sets `pool = reserved` before transferring the prior available amount.
 
+- v1.3: `release_expired_reservation` (anyone, from day 30 after reservation) reduces `reserved` and the applicant's pending payout by the reward; `pool` is unchanged, so the value becomes *available* again.
+- v1.3: `reserve_underfunded` (anyone) moves an `ELIGIBLE_UNDERFUNDED` application to `ELIGIBLE_RESERVED` when `available >= reward`, exactly as a funded verdict would have.
+
 Reclaim cannot touch reserved value. Thus the sequence “approve → close → reclaim unused → applicant withdraws” preserves the applicant promise.
 
 ## Deployment boundary
 
-Contract storage is tied to its address. Milestone v2 changes contract bytes, so it requires a fresh StudioNet deployment and starts with empty campaign state. The frontend address comes from `VITE_CONTRACT_ADDRESS`; same-origin RPC proxying remains unchanged.
+Contract storage is tied to its address. Milestones v2 and v3 change contract bytes, so each requires a fresh StudioNet deployment and starts with empty campaign state. The frontend address comes from `VITE_CONTRACT_ADDRESS`; same-origin RPC proxying remains unchanged.

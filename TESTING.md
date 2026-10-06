@@ -1,3 +1,37 @@
+# AirJudge verification record
+
+## v1.3 — fresh StudioNet runtime (Milestone v3)
+
+⟨Fill from the StudioNet run, then delete this line.⟩
+
+Contract v1.3: ⟨v1.3 address⟩ · deployment ⟨hash⟩ · SHA-256 `1da8d4a99236446e586d74ef049a9e94d9c54e986ac5c5f46ccd267ceead42b0`. Wallets: creator, applicant A, applicant B. Campaign `airjudge-v13-window-test`, reward `1 GEN`.
+
+| # | Wallet | Method | Expected observation | Tx | Status |
+|---:|---|---|---|---|---|
+| 1 | creator | `create_campaign` + `fund_campaign` 1 GEN | Pool / Reserved / Available = `1 / 0 / 1 GEN` (strings in `get_campaign_pool_status`) | ⟨tx⟩ ⟨tx⟩ | ⟨status⟩ |
+| 2 | A | `submit_application` + `judge_application` | `ELIGIBLE_RESERVED`; `get_payout_window` shows `expires_day = reserved_day + 30` | ⟨tx⟩ ⟨tx⟩ | ⟨status⟩ |
+| 3 | B | `submit_application` with A's evidence URL plus `?utm_source=x` | **reverted** `this evidence has already been submitted to this campaign` (v1.2 accepted it) | ⟨tx⟩ | ⟨status⟩ |
+| 4 | B | `submit_application` (own evidence) + `judge_application` | `ELIGIBLE_UNDERFUNDED`; `reservable_now = false` | ⟨tx⟩ ⟨tx⟩ | ⟨status⟩ |
+| 5 | B | `release_expired_reservation(campaign, A)` | **reverted** `claim window is still open` | ⟨tx⟩ | ⟨status⟩ |
+| 6 | B | `reserve_underfunded(campaign, B)` | **reverted** `campaign pool still cannot cover the reward` | ⟨tx⟩ | ⟨status⟩ |
+| 7 | creator | `fund_campaign` 1 GEN | `reservable_now = true` for B | ⟨tx⟩ | ⟨status⟩ |
+| 8 | A | `reserve_underfunded(campaign, B)` | B `ELIGIBLE_RESERVED`; `2 / 2 / 0 GEN` | ⟨tx⟩ | ⟨status⟩ |
+| 9 | B | `withdraw` | B receives `1 GEN` (native transfer hash recorded); `1 / 1 / 0 GEN` | ⟨tx⟩ | ⟨status⟩ |
+
+The 30-day release itself cannot be waited for in one session; the on-chain run proves the window is enforced (row 5) and the offline suite proves the release (`test_anyone_may_release_on_day_thirty_and_the_pool_is_untouched` and its mutants).
+
+## v1.3 — local gates
+
+| Gate | Observed result | Status |
+|---|---|---|
+| `python3 -m pytest tests/ -q` | 46 passed | PASS |
+| `python3 tests/mutation_check.py` | 38/38 killed | PASS |
+| `python3 -m genvm_linter.cli lint contracts/airjudge.py` | Lint passed (3 checks) | PASS |
+| `npm ci && npm run build` | built; largest chunk 296 kB, no size warning | PASS |
+| `sha256sum contracts/airjudge.py` | `1da8d4a99236446e586d74ef049a9e94d9c54e986ac5c5f46ccd267ceead42b0` | PASS |
+
+---
+
 # AirJudge v1.2 verification record
 
 ## Local gates

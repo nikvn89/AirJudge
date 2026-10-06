@@ -19,6 +19,7 @@ import {
 import {
   airJudge,
   connectWallet,
+  dayToDate,
   ensureStudioChain,
   getChainId,
   getConnectedWallet,
@@ -30,6 +31,8 @@ import {
   pollApplicationStatus,
   sleep,
 } from './lib/genlayer'
+
+import type { PayoutWindow } from './lib/genlayer'
 
 import { reportError } from './lib/errors'
 
@@ -48,6 +51,8 @@ type Busy =
   | 'judge'
   | 'withdraw'
   | 'reclaim'
+  | 'reserve'
+  | 'release'
   | 'toggle'
   | 'switch'
 
@@ -72,6 +77,7 @@ type Application = {
   reason: string
   reviewedSnapshot: string
   pendingWei: string
+  window: PayoutWindow | null
 }
 
 const short = (
@@ -1274,6 +1280,7 @@ function App() {
         reason,
         reviewedSnapshot,
         pendingWei,
+        payoutWindow,
       ] =
         await Promise.all([
           airJudge.getApplicationStatus(
@@ -1307,6 +1314,11 @@ function App() {
           ),
 
           airJudge.getPendingPayout(
+            campaign.id,
+            applicant,
+          ),
+
+          airJudge.getPayoutWindow(
             campaign.id,
             applicant,
           ),
@@ -1352,6 +1364,7 @@ function App() {
           String(
             pendingWei,
           ),
+        window: payoutWindow,
       })
     }
 
@@ -1537,6 +1550,31 @@ function App() {
         )
       },
     )
+
+  const settleAction = (
+    kind: 'reserve' | 'release',
+  ) =>
+    run(kind, async () => {
+      if (!account || !campaign || !application) {
+        throw new Error('Connect a wallet and load the application first.')
+      }
+      const result =
+        kind === 'reserve'
+          ? await airJudge.reserveUnderfunded(account, campaign.id, application.applicant)
+          : await airJudge.releaseExpiredReservation(account, campaign.id, application.applicant)
+      setNoticeKind(result.monitoringWarning ? 'info' : 'success')
+      setNotice(
+        `${kind === 'reserve' ? 'Reservation' : 'Release'} ${short(result.hash)} submitted. Verifying accepted state — do not resend.`,
+      )
+      await refreshApplicationAfterWrite(application.applicant)
+      await refreshCampaignAfterWrite(campaign.id)
+      setNoticeKind('success')
+      setNotice(
+        kind === 'reserve'
+          ? 'Reward reserved for this contributor. The 30-day claim window has started.'
+          : 'Expired reservation released back to the campaign pool.',
+      )
+    })
 
   const pendingGen =
     application
@@ -2172,6 +2210,63 @@ function App() {
                     </button>
                   )}
 
+                  {application.status === 'ELIGIBLE_RESERVED' && application.window && (
+                    <div className={application.window.expired ? 'result-box warn-box' : 'result-box'}>
+                      <span>CLAIM WINDOW</span>
+                      {application.window.expired ? (
+                        <p>
+                          Ended {dayToDate(application.window.expiresDay)} (UTC). Until someone releases it the
+                          applicant can still claim; after release the reward returns to the campaign pool.
+                        </p>
+                      ) : (
+                        <p>
+                          Claim by {dayToDate(application.window.expiresDay)} (UTC) —{' '}
+                          {application.window.expiresDay - application.window.today} day
+                          {application.window.expiresDay - application.window.today === 1 ? '' : 's'} left.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {application.status === 'ELIGIBLE_RESERVED' && application.window?.expired && (
+                    <button
+                      className="secondary full-action"
+                      onClick={() => settleAction('release')}
+                      disabled={busy !== '' || !account}
+                    >
+                      {busy === 'release' ? 'RELEASING…' : 'RELEASE EXPIRED RESERVATION'}
+                    </button>
+                  )}
+
+                  {application.status === 'ELIGIBLE_UNDERFUNDED' && (
+                    <div className="result-box">
+                      <span>WAITING FOR FUNDS</span>
+                      <p>
+                        Judged eligible while the pool could not cover the reward.{' '}
+                        {application.window?.reservableNow
+                          ? 'The pool can cover it now — anyone can reserve it.'
+                          : 'It is reserved as soon as the pool can cover it.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {application.status === 'ELIGIBLE_UNDERFUNDED' && application.window?.reservableNow && (
+                    <button
+                      className="full-action"
+                      onClick={() => settleAction('reserve')}
+                      disabled={busy !== '' || !account}
+                    >
+                      {busy === 'reserve' ? 'RESERVING…' : 'RESERVE REWARD NOW'}
+                    </button>
+                  )}
+
+                  {application.status === 'ELIGIBLE_EXPIRED' && (
+                    <div className="result-box warn-box">
+                      <span>CLAIM WINDOW EXPIRED</span>
+                      <p>The reward was not claimed within 30 days and was returned to the campaign pool.</p>
+                    </div>
+                  )}
+
                   {application.status === 'ELIGIBLE_PAID' && (
                     <div className="paid pro-paid">
                       ✓ REWARD CLAIMED
@@ -2196,7 +2291,7 @@ function App() {
       </main>
 
       <footer className="pro-footer">
-        <span>AIRJUDGE V1.2 / GENLAYER STUDIONET</span>
+        <span>AIRJUDGE V1.3 / GENLAYER STUDIONET</span>
 
         <span>
           {contractConfigured

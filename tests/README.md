@@ -16,8 +16,11 @@ Three limits are explicit:
 - `test_payout.py`: available clamp, underfunding, one-time withdrawal, and contract-driven Hypothesis accounting conservation.
 - `test_reclaim.py`: all reclaim gates, protected reservation, post-reclaim withdrawal, repeat call, reopening behavior.
 - `test_authorization.py`: foreign-wallet controls.
+- `test_v13_settlement.py` (v1.3): the transaction-day clock against the calendar, the 30-day claim window and permissionless release, late reservation of underfunded applications, released value funding the next applicant and the creator's reclaim, accounting across all of it, five evidence-URL variants that v1.2 accepted, the fixed-point fence on the real adjudication input, and exact wei strings beyond 2^53.
 
-The first mutation run killed 20/22. `creator_can_apply` survived because creator exclusion had no dedicated test; `judging_allowed_when_closed` survived because only submission-after-close was covered. Regression tests were added for both. The final score is 22/22 killed (100%).
+v1.3 adds 16 mutants (38 in total). The first v1.3 run killed 37/38: a fence mutant (markers removed without a gap, in a single pass) survived because no test combined two markers so that removing one rebuilt the other; `<CLA</EVIDENCE>IM>` was added and the final score is 38/38.
+
+The first v1.2 mutation run killed 20/22. `creator_can_apply` survived because creator exclusion had no dedicated test; `judging_allowed_when_closed` survived because only submission-after-close was covered. Regression tests were added for both. The v1.2 score was 22/22 killed.
 
 Run:
 

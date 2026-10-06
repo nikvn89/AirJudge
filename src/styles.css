@@ -1617,3 +1617,8 @@ button.secondary {
     display: none;
   }
 }
+
+/* v1.3 — claim window */
+.result-box.warn-box { border-color: #d9a441; }
+.status-pill.eligible-expired { background: #f6ead2; color: #8a5a00; }
+.secondary.full-action { margin-top: 10px; }
