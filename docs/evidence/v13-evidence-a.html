@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Claim Window for Reserved Rewards in a GenLayer Reward Contract</title>
+  </head>
+  <body>
+    <main>
+      <h1>Claim Window for Reserved Rewards in a GenLayer Reward Contract</h1>
+      <p>This contribution adds a claim window to the AirJudge Intelligent Contract on GenLayer. Before the change, a reward reserved for an eligible applicant who never withdrew stayed locked in the campaign pool forever.</p>
+      <h2>What was built</h2>
+      <p>Every reservation now records the day it was made, taken from the transaction's committed datetime. The reward stays reserved for thirty days. After that, anyone can call <code>release_expired_reservation</code>, which returns the amount to the campaign's available pool and marks the application <code>ELIGIBLE_EXPIRED</code>. Until someone releases it, the applicant can still withdraw.</p>
+      <h2>How it works</h2>
+      <p>The day number is computed arithmetically from the ISO datetime, so every validator gets the same value. The release is deterministic and never calls a model. A new view, <code>get_payout_window</code>, returns the reservation day, the expiry day, today's day and whether the window has expired, and the web app shows "Claim by YYYY-MM-DD — N days left".</p>
+      <h2>How it was tested</h2>
+      <p>The contract was run in GenLayer's Direct Mode on the real GenVM SDK. Tests cover release one second before day thirty (rejected), release at day thirty (accepted, pool untouched), withdrawal after expiry but before release, and the treasury balance after each step. A mutation run confirmed that shifting the window by one day in either direction is caught by the tests.</p>
+
+    </main>
+  </body>
+</html>

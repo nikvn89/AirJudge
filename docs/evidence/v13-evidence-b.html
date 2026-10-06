@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>One Public Contribution, One Reward: Canonical Evidence URLs</title>
+  </head>
+  <body>
+    <main>
+      <h1>One Public Contribution, One Reward: Canonical Evidence URLs</h1>
+      <p>This contribution closes a replay hole in the AirJudge Intelligent Contract on GenLayer. The contract refuses a second application that reuses evidence already submitted to the same campaign, but it compared raw URLs, so the same public page could be submitted again with a query string, a fragment, a www prefix, different letter case or a trailing slash, and be rewarded twice.</p>
+      <h2>What was built</h2>
+      <p>Evidence URLs are now reduced to a canonical identity before they are stored or compared: the scheme, query string and fragment are removed, the host and path are lower-cased, a leading www is dropped and trailing slashes are trimmed. A public view, <code>normalize_evidence_url</code>, exposes the same function so the web app can show applicants how their URL will be recorded.</p>
+      <h2>How it works</h2>
+      <p>The canonical key is computed deterministically inside the contract at submission time, before any page is fetched or any model is called. A variant of an already submitted page is rejected with "this evidence has already been submitted to this campaign".</p>
+      <h2>How it was tested</h2>
+      <p>Direct Mode tests on the real GenVM SDK submit five variants of a claimed page and expect each to be rejected, and check that genuinely different pages are still accepted. The same tests fail on the previous contract version, which accepted every variant.</p>
+
+    </main>
+  </body>
+</html>
