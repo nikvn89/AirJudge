@@ -45,20 +45,38 @@
       "status": "PASS"
     },
     "new_deployment": {
-      "status": "PENDING"
+      "status": "SOURCE_AND_PROFILE_VERIFIED",
+      "address": "0x350A7F43117AE162976E441c8B23A5C2d4F98104",
+      "deploy_receipt": "PENDING_HASH"
     },
     "new_source_parity": {
-      "status": "PENDING"
+      "status": "PASS",
+      "evidence": "docs/evidence/v4-deployment-check.json"
     },
     "new_runtime": {
-      "status": "PENDING"
+      "status": "PARTIALLY_VERIFIED",
+      "evidence": "docs/evidence/v4-settlement-runtime.json",
+      "withdrawal": "NATIVE_DELIVERY_VERIFIED",
+      "reclaim": "NATIVE_DELIVERY_VERIFIED",
+      "timed_expiry": "NOT RUN"
     },
     "browser_smoke": {
       "status": "NOT RUN",
       "reason": "Browser binary unavailable; attempted download was truncated."
     },
     "production_hosting": {
-      "status": "PENDING"
+      "status": "HTTP_AND_USER_GUIDED_FLOW_OBSERVED",
+      "url": "https://air-judge.vercel.app",
+      "automated_browser_smoke": "NOT RUN"
+    },
+    "submitted_v3_direct": {
+      "commit": "eb18500e29a65311be8a011194e45f19de55e82b",
+      "review_status": "PENDING_REVIEW",
+      "passed": 46,
+      "status": "PASS",
+      "elapsed_seconds": 87.12,
+      "command": "python3 -m pytest tests/ -q -p no:cacheprovider",
+      "executed_date_utc": "2026-10-20"
     }
   },
   "limits": [
@@ -66,5 +84,7 @@
     "Web content and final semantic labels are controlled.",
     "Native recipient delivery is not observed in Direct Mode.",
     "Historical receipts are not fresh runtime proof for 1.3.1."
-  ]
+  ],
+  "milestone": "v4_draft",
+  "incremental_baseline_commit": "eb18500e29a65311be8a011194e45f19de55e82b"
 }
