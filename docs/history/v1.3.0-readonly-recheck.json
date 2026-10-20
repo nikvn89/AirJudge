@@ -1,0 +1,30 @@
+{
+  "network": "StudioNet",
+  "chain_id": 61999,
+  "address": "0x8DFc1aFE0542bb399756fa9E5BA89992E7B53a85",
+  "checked_at": "2026-10-20T11:15:59.840Z",
+  "source_parity": {
+    "normalization": "CRLF to LF only",
+    "local_sha256": "bf4db63a5836f00a030b513563657088caee9f643a1339ff6864bf1118a12a78",
+    "deployed_sha256": "37bdda3c1a5693aad59f0dbf0711c53d36de4f5bb0327245b8e23c7b787c2bf1",
+    "pass": false
+  },
+  "profile": {
+    "contract_name": "AirJudge",
+    "version": "1.3.0",
+    "claim_window_days": 30,
+    "clock_source": "transaction_datetime",
+    "evidence_identity": "host without www + path without trailing slash, lower case; scheme, query and fragment ignored"
+  },
+  "transaction": {
+    "hash": "0x78a0760223e33def873d5b3b07c977248b9dae202b40f67a0f0c7195c6fde597",
+    "status": "FINALIZED",
+    "from": "0x146e44881d35814bA582D265AF5b97ef2695ec8e",
+    "to": "0x8DFc1aFE0542bb399756fa9E5BA89992E7B53a85",
+    "leader_execution": "SUCCESS",
+    "execution": {
+      "state": "success"
+    }
+  },
+  "scope": "Historical 1.3.0 receipt format check, not new release runtime proof"
+}

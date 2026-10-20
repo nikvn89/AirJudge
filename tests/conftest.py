@@ -87,6 +87,7 @@ def judge_application(
     proof_url,
     evidence_url,
     eligible=True,
+    raw_result=None,
 ):
     marker = contract._proof_marker(campaign_id, str(applicant))
     vm.clear_mocks()
@@ -105,7 +106,7 @@ def judge_application(
         },
     )
     verdict = "ELIGIBLE" if eligible else "NOT_ELIGIBLE"
-    injected_result = json.dumps(
+    injected_result = raw_result if raw_result is not None else json.dumps(
         {
             "verdict": verdict,
             "reason": "Injected Direct Mode verdict.",

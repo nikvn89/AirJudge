@@ -1,6 +1,7 @@
+import { assertProfile, postcondition, waitForExecution } from './txVerification'
+import type { Snapshot } from './txVerification'
 import { createClient } from 'genlayer-js'
 import { studionet } from 'genlayer-js/chains'
-import { TransactionStatus } from 'genlayer-js/types'
 import { getAddress } from 'viem'
 import {
   CONTRACT_ADDRESS,
@@ -210,7 +211,6 @@ function submissionError(
   console.error('[AirJudge] transaction submission failed before tx hash', {
     code: normalized.code,
     message: normalized.message,
-    raw: error,
   })
 
   const suffix = normalized.code === undefined
@@ -218,98 +218,76 @@ function submissionError(
     : `${normalized.message} (code ${normalized.code})`
 
   return new Error(
-    `Transaction was not submitted: no transaction hash was returned. It is safe to retry after checking the wallet/network connection. ${suffix}`,
+    `No transaction hash was returned. Check wallet activity and Explorer before retrying; submission may be unknown. ${suffix}`,
   )
 }
 
-async function write(
-  account: string,
-  functionName: string,
-  args: Array<
-    string | boolean | bigint
-  >,
-  value: bigint = 0n,
-) {
-  await ensureStudioChain()
-
-  const client =
-    getWriteClient(account)
-
-  /*
-   * Once writeContract returns a tx hash,
-   * the write has already been submitted.
-   *
-   * If RPC receipt polling fails after that,
-   * we MUST NOT report the transaction as
-   * definitely failed. Doing so can make the
-   * user click again and duplicate the write.
-   */
-  let hash: any
-
-  try {
-    hash =
-      await client.writeContract({
-        address: CONTRACT_ADDRESS,
-        functionName,
-        args,
-        value,
-      } as any)
-  } catch (error) {
-    throw submissionError(
-      error,
-    )
-  }
-
-  let monitoringWarning = false
-
-  try {
-    await client.waitForTransactionReceipt(
-      {
-        hash,
-        status:
-          TransactionStatus.ACCEPTED,
-      },
-    )
-  } catch {
-    monitoringWarning = true
-  }
-
-  return {
-    hash: String(hash),
-    monitoringWarning,
-  }
+async function transactionSnapshot(campaignId: string, applicant = ''): Promise<Snapshot> {
+  const app = (method: string) => applicant ? readRaw(method, [campaignId, applicant]) : Promise.resolve('')
+  const [pool, reward, name, criteria, creator, active, status, pending, description, proof, evidence, reviewed] = await Promise.all([
+    readRaw('get_campaign_pool_status', [campaignId]), readRaw('get_campaign_reward', [campaignId]),
+    readRaw('get_campaign_name', [campaignId]), readRaw('get_campaign_criteria', [campaignId]),
+    readRaw('get_campaign_creator', [campaignId]), readRaw('is_campaign_active', [campaignId]),
+    app('get_application_status'), app('get_pending_payout'), app('get_application_description'),
+    app('get_application_proof_url'), app('get_application_evidence'), app('get_reviewed_snapshot'),
+  ])
+  const treasury = JSON.parse(String(pool))
+  return { pool: BigInt(treasury.pool_wei), reserved: BigInt(treasury.reserved_wei),
+    reward: BigInt(String(reward)), pending: BigInt(String(pending || '0')), name: String(name),
+    criteria: String(criteria), creator: String(creator), active: active === true, status: String(status),
+    description: String(description), proof: String(proof), evidence: String(evidence), snapshot: String(reviewed) }
 }
 
-async function writeAsync(
-  account: string,
-  functionName: string,
-  args: Array<
-    string | boolean | bigint
-  >,
-) {
+async function fetchTransaction(hash: string): Promise<unknown> {
+  const response = await fetch(STUDIO_RPC, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_getTransactionByHash',params:[hash]}),
+    signal: AbortSignal.timeout(15_000) })
+  if (!response.ok) throw new Error('Transaction confirmation temporarily unavailable.')
+  const body = await response.json()
+  if (body.error) throw new Error('Transaction confirmation temporarily unavailable.')
+  // Never log/store the raw response: node configuration can contain credentials.
+  return body.result
+}
+
+function txNotice(hash: string, state: string) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('airjudge:transaction', {detail:{hash,state}}))
+}
+
+async function write(account: string, functionName: string, args: Array<string | boolean | bigint>, value = 0n) {
+  const info = JSON.parse(String(await readRaw('get_contract_info')))
+  assertProfile(info)
   await ensureStudioChain()
-
-  const client =
-    getWriteClient(account)
-
-  let hash: any
-
+  const selected = await getConnectedWallet()
+  if (selected.toLowerCase() !== account.toLowerCase()) throw new Error('Wallet changed. Refresh and confirm the selected account.')
+  const campaignId = String(args[0]).trim()
+  const targeted = ['judge_application','reserve_underfunded','release_expired_reservation'].includes(functionName)
+  const applicant = targeted ? String(args[1]) : ['submit_application','withdraw'].includes(functionName) ? account : ''
+  const before = await transactionSnapshot(campaignId, applicant)
+  if ((await getConnectedWallet()).toLowerCase() !== account.toLowerCase()) throw new Error('Wallet changed during the state check. Refresh before signing.')
+  const client = getWriteClient(account)
+  let hash: string
   try {
-    hash =
-      await client.writeContract({
-        address: CONTRACT_ADDRESS,
-        functionName,
-        args,
-        value: 0n,
-      } as any)
+    hash = String(await client.writeContract({ address: CONTRACT_ADDRESS, functionName, args, value } as any))
+  } catch (error) { throw submissionError(error) }
+  txNotice(hash, 'submitted')
+  try {
+    await waitForExecution(hash, () => fetchTransaction(hash))
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        const after = await transactionSnapshot(campaignId, applicant)
+        if (postcondition({method:functionName,args,account,value},before,after)) {
+          txNotice(hash, 'verified')
+          return {hash,monitoringWarning:false}
+        }
+      } catch { /* retry a temporarily unavailable finalized read */ }
+      await sleep(2500)
+    }
+    throw new Error(`Transaction ${hash} executed, but its postcondition is not confirmed. Do not resend; refresh state.`)
   } catch (error) {
-    throw submissionError(
-      error,
-    )
-  }
-
-  return {
-    hash: String(hash),
+    txNotice(hash, 'check required')
+    // Refresh the affected records even after an execution error; no success is inferred.
+    await transactionSnapshot(campaignId, applicant).catch(() => undefined)
+    throw error
   }
 }
 
@@ -325,7 +303,7 @@ async function readRaw(
     address: CONTRACT_ADDRESS,
     functionName,
     args,
-    stateStatus: 'accepted',
+    stateStatus: 'finalized',
   } as any)
 }
 
@@ -372,6 +350,7 @@ export type CampaignPool = {
 }
 
 export const airJudge = {
+  getContractInfo: async (): Promise<Record<string, unknown>> => JSON.parse(String(await read('get_contract_info'))),
   createCampaign: (
     account: string,
     campaignId: string,
@@ -449,7 +428,7 @@ export const airJudge = {
     campaignId: string,
     applicant: string,
   ) =>
-    writeAsync(
+    write(
       account,
       'judge_application',
       [

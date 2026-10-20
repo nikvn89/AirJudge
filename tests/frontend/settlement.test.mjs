@@ -1,0 +1,43 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {executionState,waitForExecution,postcondition,assertProfile} from '../../src/lib/txVerification.ts'
+const make = (status='FINALIZED', execution='SUCCESS', tag=0, mode='leader') => ({status,consensus_data:{leader_receipt:[{mode,execution_result:execution,result:Buffer.from([tag,...Buffer.from('reason')]).toString('base64')}]}})
+for (const status of ['PENDING','ACCEPTED','REVEALING']) test(`${status} cannot imply success`,()=>assert.equal(executionState(make(status)).state,'pending'))
+test('finalized without leader execution is pending',()=>assert.equal(executionState({status:'FINALIZED'}).state,'pending'))
+test('validator result cannot imply leader success',()=>assert.equal(executionState(make('FINALIZED','SUCCESS',0,'validator')).state,'pending'))
+test('finalized leader SUCCESS plus normal return is success',()=>assert.equal(executionState(make()).state,'success'))
+test('leader ERROR is a rollback',()=>assert.equal(executionState(make('FINALIZED','ERROR',1)).state,'error'))
+test('UserError tag overrides SUCCESS label',()=>assert.equal(executionState(make('FINALIZED','SUCCESS',1)).state,'error'))
+test('missing return result cannot confirm success',()=>assert.equal(executionState({status:'FINALIZED',consensus_data:{leader_receipt:[{mode:'leader',execution_result:'SUCCESS'}]}}).state,'pending'))
+test('cancelled validator does not override leader',()=>{const tx=make();tx.consensus_data.leader_receipt.push({mode:'validator',execution_result:'ERROR'});assert.equal(executionState(tx).state,'success')})
+test('timeout stays delayed and prevents a success claim',async()=>{let time=0;await assert.rejects(waitForExecution('0x123',async()=>make('ACCEPTED'),{now:()=>time,timeoutMs:3,pause:async()=>{time++}}),/confirmation delayed.*Do not resend/)})
+test('execution error is surfaced immediately',async()=>{await assert.rejects(waitForExecution('0x123',async()=>make('FINALIZED','ERROR',1)),/execution ERROR/)})
+test('temporary RPC error retries before success',async()=>{let calls=0;await waitForExecution('0x123',async()=>{if(calls++===0)throw Error('offline');return make()},{pause:async()=>{}});assert.equal(calls,2)})
+const profile={contract_name:'AirJudge',version:'1.3.1',semantic_output:'strict_json_two_keys',claim_window_basis:'UTC_calendar_day_soft_expiry'}
+test('expected profile accepted',()=>assert.doesNotThrow(()=>assertProfile(profile)))
+for(const version of ['1.2.0','1.3.0','1.4.0',''])test(`wrong deployment ${version} locked`,()=>assert.throws(()=>assertProfile({...profile,version}),/Writes locked/))
+const unit=1000000000000000001n
+const before={pool:3n*unit,reserved:unit,pending:unit,reward:unit,status:'ELIGIBLE_RESERVED',active:true,name:'Campaign',criteria:'Twenty characters at least',creator:'0xabc',description:'',proof:'',evidence:'',snapshot:''}
+const action=(method,args=['cid'])=>({method,args,account:'0xabc',value:unit})
+const check=(method,b,a)=>postcondition(action(method),b,a)
+test('same readable application is not proof of withdraw',()=>assert.equal(check('withdraw',before,before),false))
+test('withdraw verifies exact ledger movement',()=>assert.equal(check('withdraw',before,{...before,pool:2n*unit,reserved:0n,pending:0n,status:'ELIGIBLE_PAID'}),true))
+test('withdraw rejects stale pending amount',()=>assert.equal(check('withdraw',before,{...before,pool:2n*unit,reserved:0n,status:'ELIGIBLE_PAID'}),false))
+test('release does not move pool',()=>assert.equal(check('release_expired_reservation',before,{...before,reserved:0n,pending:0n,status:'ELIGIBLE_EXPIRED'}),true))
+test('release rejects a pool deduction',()=>assert.equal(check('release_expired_reservation',before,{...before,pool:2n*unit,reserved:0n,pending:0n,status:'ELIGIBLE_EXPIRED'}),false))
+const waiting={...before,status:'ELIGIBLE_UNDERFUNDED',pending:0n}
+test('late reserve checks reservation delta',()=>assert.equal(check('reserve_underfunded',waiting,{...before,reserved:2n*unit}),true))
+test('late reserve rejects missing reservation delta',()=>assert.equal(check('reserve_underfunded',waiting,before),false))
+test('fund verifies exact wei above safe integer',()=>assert.equal(check('fund_campaign',before,{...before,pool:4n*unit}),true))
+test('fund ignores a rounded or missing amount',()=>assert.equal(check('fund_campaign',before,{...before,pool:4n*unit-1n}),false))
+test('reclaim protects reservation',()=>assert.equal(check('reclaim_unused_pool',before,{...before,active:false,pool:unit}),true))
+test('reclaim cannot confirm while active',()=>assert.equal(check('reclaim_unused_pool',before,{...before,pool:unit}),false))
+test('toggle compares the intended active flag',()=>assert.equal(postcondition(action('set_campaign_active',['cid',false]),before,{...before,active:false}),true))
+test('toggle rejects unchanged flag',()=>assert.equal(postcondition(action('set_campaign_active',['cid',false]),before,before),false))
+test('unknown action never succeeds',()=>assert.equal(check('unknown',before,before),false))
+test('judge pending cannot be reported as a verdict',()=>assert.equal(check('judge_application',{...before,status:'PENDING'}, {...before,status:'PENDING'}),false))
+test('judge eligible must reserve the reward',()=>assert.equal(check('judge_application',{...before,status:'PENDING',pending:0n},{...before,reserved:2n*unit,snapshot:'reviewed text'}),true))
+test('judge cannot reserve without a reviewed snapshot',()=>assert.equal(check('judge_application',{...before,status:'PENDING',pending:0n},{...before,reserved:2n*unit}),false))
+test('insolvent treasury cannot pass',()=>assert.equal(check('set_campaign_active',before,{...before,pool:0n}),false))
+test('create pins creator, criteria, name, reward',()=>{const args=['cid','Name','A concrete requirement',unit];const after={...before,pool:0n,reserved:0n,pending:0n,name:'Name',criteria:args[2]};assert.equal(postcondition(action('create_campaign',args),before,after),true);assert.equal(postcondition(action('create_campaign',args),before,{...after,creator:'0xdef'}),false)})
+test('submit pins all supplied application fields',()=>{const args=['cid','Concrete contribution text','https://proof','https://evidence'];const after={...before,status:'PENDING',pending:0n,description:args[1],proof:args[2],evidence:args[3]};assert.equal(postcondition(action('submit_application',args),before,after),true);assert.equal(postcondition(action('submit_application',args),before,{...after,evidence:'https://other'}),false)})

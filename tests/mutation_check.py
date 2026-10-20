@@ -178,6 +178,12 @@ MUTANTS = [
     Mutant("fence_no_gap_single_pass",
            "                    cleaned = cleaned[:index] + \" \" + cleaned[index + len(token):]\n                    index = cleaned.upper().find(token)\n            if cleaned == before:\n                return cleaned",
            "                    cleaned = cleaned[:index] + cleaned[index + len(token):]\n                    index = cleaned.upper().find(token)\n            return cleaned"),
+    Mutant("semantic_reason_may_be_empty",
+           '                or not data["reason"].strip() or len(data["reason"]) > 240):',
+           '                or len(data["reason"]) > 240):'),
+    Mutant("semantic_extra_keys_allowed",
+           'not isinstance(data, dict) or len(data) != 2',
+           'not isinstance(data, dict)'),
     Mutant("pool_status_as_json_number",
            "            \"pool_wei\": str(int(\n                pool_wei\n            )),",
            "            \"pool_wei\": int(\n                pool_wei\n            ),"),
@@ -212,6 +218,7 @@ def main() -> int:
     killed: list[str] = []
     survived: list[str] = []
 
+    # Collection/import errors do not establish that a behavioral mutant was killed.
     baseline = run_suite(CONTRACT)
     if baseline.returncode != 0:
         print("BASELINE FAILED")
@@ -227,9 +234,13 @@ def main() -> int:
             if result.returncode == 0:
                 survived.append(mutant.name)
                 outcome = "SURVIVED"
-            else:
+            elif result.returncode == 1 and "FAILED tests/" in result.stdout and "ERROR collecting" not in result.stdout:
                 killed.append(mutant.name)
                 outcome = "KILLED"
+            else:
+                print(f"INVALID TEST RUN: {mutant.name}")
+                print(result.stdout[-4000:])
+                return 2
             print(f"[{index:02d}/{len(MUTANTS):02d}] {outcome}: {mutant.name}")
 
     print(

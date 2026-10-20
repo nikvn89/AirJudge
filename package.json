@@ -1,13 +1,16 @@
 {
   "name": "airjudge",
   "private": true,
-  "version": "1.3.0",
+  "version": "1.3.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/verify-source.mjs && tsc -b && vite build",
     "preview": "vite preview",
-    "test": "python3 -m pytest tests/ -q"
+    "test": "python3 -m pytest tests/ -q",
+    "test:frontend": "node --experimental-strip-types --test tests/frontend/*.test.mjs",
+    "verify": "python3 -m genvm_linter.cli lint contracts/airjudge.py && python3 -m pytest tests/ -q && npm run test:frontend && npm run build",
+    "check:deployment": "node --experimental-strip-types scripts/check-deployment.mjs"
   },
   "dependencies": {
     "genlayer-js": "1.1.8",

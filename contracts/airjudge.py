@@ -15,7 +15,7 @@ class NativePayout:
         def emit_transfer(self, value: u256, /) -> None: ...
 
 
-CONTRACT_VERSION = "1.3.0"
+CONTRACT_VERSION = "1.3.1"
 
 # A reserved reward is held for its applicant for this many days (counted from
 # the transaction date that reserved it). After that anyone may release it back
@@ -621,7 +621,7 @@ class AirJudge(gl.Contract):
         # STEP 1 — VERIFY ACCOUNT CONTROL + URL BINDING
         # =====================================================
 
-        def verify_proof() -> bool:
+        def verify_proof() -> str:
 
             try:
                 proof_text = (
@@ -631,10 +631,10 @@ class AirJudge(gl.Contract):
                     )
                 )
             except Exception:
-                return False
+                return "FETCH_FAILED"
 
             if proof_text is None:
-                return False
+                return "FETCH_FAILED"
 
             text = str(
                 proof_text
@@ -655,16 +655,14 @@ class AirJudge(gl.Contract):
                 in text
             )
 
-            return (
-                marker_ok
-                and evidence_binding
-            )
+            return "BOUND" if marker_ok and evidence_binding else "UNBOUND"
 
-        proof_verified = (
-            gl.eq_principle.strict_eq(
-                verify_proof
-            )
-        )
+        proof_result = gl.eq_principle.strict_eq(verify_proof)
+        if proof_result == "FETCH_FAILED":
+            raise gl.vm.UserError("proof fetch unavailable")
+        if proof_result not in ("BOUND", "UNBOUND"):
+            raise gl.vm.UserError("invalid proof result")
+        proof_verified = proof_result == "BOUND"
 
         if not proof_verified:
 
@@ -715,23 +713,8 @@ class AirJudge(gl.Contract):
             )
         )
 
-        if (
-            reviewed_snapshot
-            == "FETCH_FAILED"
-        ):
-
-            self.application_status[
-                key
-            ] = "NOT_ELIGIBLE"
-
-            self.application_reason[
-                key
-            ] = (
-                "Public contribution evidence "
-                "could not be fetched"
-            )
-
-            return
+        if reviewed_snapshot == "FETCH_FAILED":
+            raise gl.vm.UserError("evidence fetch unavailable")
 
         # =====================================================
         # STEP 3 — AI JUDGES THE CONSENSUS SNAPSHOT
@@ -822,73 +805,31 @@ class AirJudge(gl.Contract):
             )
         )
 
-        result_str = str(
-            raw_result
-        )
+        # A provider/model failure is not a negative eligibility judgment.
+        # Reject the entire transaction before snapshot, verdict or money writes.
+        def unique_object(pairs):
+            obj = {}
+            for name, value in pairs:
+                if name in obj:
+                    raise gl.vm.UserError("invalid semantic result")
+                obj[name] = value
+            return obj
 
         try:
-
-            first = result_str.find(
-                "{"
-            )
-
-            last = result_str.rfind(
-                "}"
-            )
-
-            if (
-                first != -1
-                and last != -1
-            ):
-
-                body = result_str[
-                    first:last + 1
-                ]
-
-                body = (
-                    body
-                    .replace(
-                        ",}",
-                        "}",
-                    )
-                    .replace(
-                        ",\n}",
-                        "\n}",
-                    )
-                )
-
-                data = json.loads(
-                    body
-                )
-
-            else:
-
-                data = {}
-
+            data = json.loads(str(raw_result), object_pairs_hook=unique_object)
         except Exception:
+            raise gl.vm.UserError("invalid semantic result")
 
-            data = {}
+        if (not isinstance(data, dict) or len(data) != 2
+                or "verdict" not in data or "reason" not in data
+                or not isinstance(data["verdict"], str)
+                or data["verdict"] not in ("ELIGIBLE", "NOT_ELIGIBLE")
+                or not isinstance(data["reason"], str)
+                or not data["reason"].strip() or len(data["reason"]) > 240):
+            raise gl.vm.UserError("invalid semantic result")
 
-        raw_verdict = str(
-            data.get(
-                "verdict",
-                "NOT_ELIGIBLE",
-            )
-        ).strip().upper()
-
-        reason = str(
-            data.get(
-                "reason",
-                "No reason provided",
-            )
-        )[:240]
-
-        verdict = (
-            "ELIGIBLE"
-            if raw_verdict
-            == "ELIGIBLE"
-            else "NOT_ELIGIBLE"
-        )
+        verdict = data["verdict"]
+        reason = data["reason"].strip()
 
         # =====================================================
         # STEP 4 — COMMIT EXACT REVIEWED CONTENT ONCHAIN
@@ -1168,6 +1109,8 @@ class AirJudge(gl.Contract):
             "contract_name": "AirJudge",
             "version": CONTRACT_VERSION,
             "claim_window_days": CLAIM_WINDOW_DAYS,
+            "claim_window_basis": "UTC_calendar_day_soft_expiry",
+            "semantic_output": "strict_json_two_keys",
             "clock_source": "transaction_datetime",
             "evidence_identity": "host without www + path without trailing slash, lower case; scheme, query and fragment ignored",
         })

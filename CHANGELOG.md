@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.3.1] — 2026-10-20 — Milestone v3 release candidate
+
+- Retains the v3 date-based reservation release, late reservation and conservative URL replay identity from the supplied 1.3.0 candidate.
+- Strict JSON eligibility schema; malformed/duplicate/wrapped/uncertain output rolls back before writes.
+- Proof-fetch/evidence-fetch/provider failures preserve a pending application instead of recording a negative judgment.
+- Finalized leader execution and normal-return tag plus method-specific postcondition checks; wrong deployment profile locks writes.
+- Keeps the loaded application during a same-campaign refresh, removes demo amount defaults, exposes full transaction links and names the UTC calendar-day soft-expiry boundary explicitly.
+- Read-only source/profile/state verifier and frozen-source build check. New production deployment, source parity and runtime proof remain PENDING.
+- Accepted v2 commit preserved; historical evidence is labeled and retained separately.
+
 ## [1.3.0] — 2026-10-06 — Fair settlement: claim window, late reservation, one reward per contribution
 
 ### Contract changed — fresh deployment required

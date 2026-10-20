@@ -1,43 +1,27 @@
-# Security model
+# Security and evidence boundary
 
-## Trust boundary
+## Deterministic responsibilities
 
-AirJudge keeps authorization, campaign lifecycle, reward capacity, reservation, and payout accounting deterministic. Validators only resolve external proof/evidence content and the qualitative eligibility verdict. Applicant claims and rendered evidence are untrusted prompt inputs.
+Creator-only creation controls, funding, active flag and reclaim; applicant-only withdrawal. Anyone can judge pending applications, reserve an already-eligible underfunded reward, or release an expired reservation. Amounts are integer wei. `pool >= reserved`; pending value is removed exactly once by withdrawal or release. A released or paid application is terminal. Reclaim after closing leaves protected reservations untouched.
 
-## Tested invariants
+Each campaign has one application per wallet. Canonical evidence identity is scoped to the campaign. Replay keys lowercase the entire host/path, strip a leading `www.`, ignore scheme/query/fragment and remove trailing slashes. This blocks the tested syntactic variants, but **can also reject distinct pages** on case-sensitive paths or query-driven sites. Redirects, short links, mirrors and different URLs for the same work are not universally detected. Admission latches a URL before adjudication; a malicious first submission may prevent another wallet from using it in that campaign.
 
-- Only the campaign creator can fund, pause, reopen, or reclaim its pool.
-- A reservation can be released only after its 30-day claim window, only once, and releasing it changes `reserved` and the applicant's pending payout, never `pool`.
-- An underfunded eligible application is reserved only when `available >= reward`.
-- Evidence already used in a campaign cannot be reused through a URL variant.
-- Reclaim is impossible while a campaign is active.
-- Reclaimable value is `max(pool - reserved, 0)`.
-- Reclaim sets `pool = reserved` and never writes `campaign_reserved_wei`.
-- A reserved applicant can still withdraw after creator reclaim.
-- A payout is reserved only when the available pool covers the configured reward.
-- Withdrawal clears pending value and reduces both pool and reserved exactly once.
-- Across the tested lifecycle, funded value equals reclaimed value plus withdrawn value plus the remaining pool.
+## Semantic boundary
 
-The Direct Mode suite exercises these properties against the production contract and kills all 22 defined mutants. The boundary of that evidence is documented in `tests/README.md`.
+Validators assess only whether fetched evidence supports campaign eligibility criteria. Proof pages, applicant text and evidence can be misleading. A marker containing an address and URL is public and copyable; it is not a cryptographic signature by the external page owner or proof of independent authorship. Signed submission only authenticates the sending wallet.
 
-## Closed in v1.3
+Only raw JSON with exactly `verdict` and `reason`, a verdict of `ELIGIBLE` or `NOT_ELIGIBLE`, and a nonempty string reason of at most 240 characters is accepted. Invalid schema, duplicate keys and provider/model failures cannot be rewritten as a semantic verdict. Claim/evidence fence stripping reduces delimiter confusion; it does not prove prompt-injection resistance or model correctness.
 
-- **Reserved rewards had no expiry** (open in v1.2). A reservation now has a 30-day claim window counted from the transaction date that created it; afterwards anyone may release it to the available pool. Releasing never touches the pool, never pays anyone, and never touches another applicant's reservation. Until it is released the applicant can still withdraw. (`test_reservation_cannot_be_released_inside_the_window`, `test_anyone_may_release_on_day_thirty_and_the_pool_is_untouched`, mutants `release_window_off_by_one`, `release_without_window`, `release_keeps_reserved`, `release_keeps_pending_payout`.)
-- **One contribution could be paid twice through URL variants.** The replay key now ignores scheme, `www.`, query, fragment, letter case and trailing slashes. (`test_url_variant_of_used_evidence_is_refused`, five variants that each fail on v1.2.)
-- **Fence markers in lower case or nested form reached the adjudication input.** Fixed-point, case-insensitive strip. (`test_fence_strip_is_case_insensitive_and_fixed_point`, `test_adjudication_input_carries_no_injected_markers`.)
-- **Eligible applicants judged while the pool was short were stuck.** `reserve_underfunded` reserves them once funds exist. (`test_underfunded_application_is_reserved_once_funds_arrive`, `test_expired_reservation_funds_the_next_eligible_contributor`.)
+A consensus-reviewed snapshot records what was read, not objective truth. Evidence may change/disappear before it is fetched. Web equality consensus and model agreement can fail. See tests and runtime gates for what was actually executed.
 
-## Known limitations — open
+## Release clock and liveness
 
-- The claim window is fixed at 30 days for every campaign; it is not configurable per campaign.
-- Two distinct URLs that show the same contribution (a pull request and its `/files` tab, a redirect or short link) are still two pieces of evidence. The proof page must bind the exact URL, and each wallet may apply once per campaign, but the canonical identity does not follow redirects.
-- Reservation order is first come, first served: when several underfunded applicants wait, whoever triggers `reserve_underfunded` first is reserved first.
+Date-based soft expiry opens release eligibility at 00:00 UTC on `reservation_day + 30`; a late-day reservation is therefore protected for less than 720 elapsed hours. Nothing happens automatically. Until release executes, even an overdue applicant can withdraw. At the boundary, transaction ordering resolves the withdrawal/release race. Expired rewards are released only by a transaction and never restored to that applicant.
 
-External evidence can change or disappear before validators fetch it. AirJudge commits the exact consensus-reviewed snapshot after retrieval, but does not establish universal authorship or detect plagiarism across the web.
+Late reservation is first-come-first-served among underfunded applicants; no automatic queue or keeper is supplied. An inactive campaign blocks new submissions/judging but permits the existing settlement paths, and the creator can reopen it. External native-transfer delivery is a separate runtime boundary: Direct Mode ledger checks alone do not prove the recipient received funds or a later delivery failure was refunded.
 
-## Accepted by design
+## Browser and deployment
 
-- One application is allowed per `(campaign, applicant)`.
-- One evidence URL is allowed per campaign.
-- Closing a campaign stops submission and judging, and is the explicit prerequisite for reclaiming unused pool value.
-- Direct Mode cannot observe the native outbound transfer; StudioNet transaction evidence is required for that boundary.
+Writes require the exact supported deployment profile before wallet signing. After submission, the frontend checks FINALIZED, authoritative leader SUCCESS and normal-return tag, then method-specific finalized postconditions. Timeout or missing evidence never produces a success claim. Concurrent unrelated campaign writes can prevent an exact delta from being confirmed; the UI conservatively asks for inspection instead of declaring failure or resending.
+
+Source parity, real native transfers, actual validator behavior, signed wallet switching and production hosting must be verified for the final new address. Historical screenshots/transactions and local mocked semantic labels cannot establish those gates.

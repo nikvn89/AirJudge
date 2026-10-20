@@ -1,0 +1,20 @@
+{
+  "project": "AirJudge",
+  "milestone": "v3",
+  "contract_version": "1.3.1",
+  "network": "StudioNet",
+  "chain_id": 61999,
+  "reviewed_project_commit": "0c71578b2b992eb44e4d7b6d0b102dda772c8e8f",
+  "accepted_milestone_v2_commit": "9ae45a5bdbd79da53da334c1f178c1eebd1ec090",
+  "uploaded_archive_commit": "eb18500e29a65311be8a011194e45f19de55e82b",
+  "contract_file": "contracts/airjudge.py",
+  "normalized_sha256": "bf4db63a5836f00a030b513563657088caee9f643a1339ff6864bf1118a12a78",
+  "source_normalization": "CRLF to LF only",
+  "deployment": {
+    "status": "PENDING",
+    "address": null,
+    "transaction": null
+  },
+  "runtime_status": "PENDING",
+  "head_evidence_policy": "Record the actual final GitHub HEAD externally after upload; do not embed a self-referential commit SHA."
+}

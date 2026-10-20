@@ -265,7 +265,7 @@ def test_normalize_view_and_contract_info(airjudge):
     assert airjudge.normalize_evidence_url("HTTPS://WWW.GitHub.com/org/repo/pull/12/?tab=files#x") == "github.com/org/repo/pull/12"
     assert airjudge.normalize_evidence_url("x" * 513) == ""
     info = json.loads(airjudge.get_contract_info())
-    assert (info["version"], info["claim_window_days"], info["clock_source"]) == ("1.3.0", 30, "transaction_datetime")
+    assert (info["version"], info["claim_window_days"], info["clock_source"]) == ("1.3.1", 30, "transaction_datetime")
 
 
 # ---------------------------------------------------------------------------

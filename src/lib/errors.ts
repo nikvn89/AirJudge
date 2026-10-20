@@ -77,7 +77,7 @@ export function normalizeError(raw: unknown): NormalizedError {
     message = 'Unexpected wallet or network error. Open the browser console for details.'
   }
 
-  message = message.split('\n')[0]!.trim().slice(0, 260)
+  message = message.split('\n')[0]!.trim().slice(0, 550)
   return { message, ...(code === undefined ? {} : { code }), raw }
 }
 
@@ -87,7 +87,6 @@ export function reportError(context: string, raw: unknown): string {
   console.error(`[AirJudge] ${context} failed`, {
     code: normalized.code,
     message: normalized.message,
-    raw,
   })
 
   return normalized.code === undefined

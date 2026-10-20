@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 
@@ -35,6 +36,7 @@ import {
 import type { PayoutWindow } from './lib/genlayer'
 
 import { reportError } from './lib/errors'
+import { assertProfile } from './lib/txVerification'
 
 import StatusPill from './components/StatusPill'
 import WalletButton from './components/WalletButton'
@@ -157,6 +159,28 @@ async function copyText(
 }
 
 function App() {
+  const loadedCampaignId = useRef('')
+  const [deploymentStatus, setDeploymentStatus] = useState('Checking deployment…')
+  const [profileReady, setProfileReady] = useState(false)
+  const [latestTx, setLatestTx] = useState<{hash:string;state:string} | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    airJudge.getContractInfo().then(info => {
+      assertProfile(info)
+      if (!cancelled) { setProfileReady(true); setDeploymentStatus('AirJudge 1.3.1 · deployment profile verified') }
+    }).catch(() => {
+      if (!cancelled) setDeploymentStatus('Read-only: configure the verified AirJudge 1.3.1 deployment before writing.')
+    })
+    const onTransaction = (event: Event) => {
+      const detail = (event as CustomEvent<{hash:string;state:string}>).detail
+      setLatestTx(detail)
+      setNoticeKind('info')
+      setNotice(`Transaction ${detail.hash}: ${detail.state}. Waiting for finalized execution and state checks; do not resend.`)
+    }
+    window.addEventListener('airjudge:transaction', onTransaction)
+    return () => { cancelled = true; window.removeEventListener('airjudge:transaction', onTransaction) }
+  }, [])
+
   const [
     account,
     setAccount,
@@ -299,11 +323,10 @@ function App() {
   const [
     createReward,
     setCreateReward,
-  ] = useState('5')
+  ] = useState('')
 
-  // Optional GEN sent with create_campaign. Empty or 0 keeps the campaign
-  // unfunded at creation, which is how it behaved before create_campaign
-  // became payable.
+  // Optional second transaction: create_campaign is nonpayable; fund_campaign
+  // runs only after campaign creation is finalized and verified.
   const [
     createFunding,
     setCreateFunding,
@@ -312,7 +335,7 @@ function App() {
   const [
     fundAmount,
     setFundAmount,
-  ] = useState('10')
+  ] = useState('')
 
   const [
     description,
@@ -379,6 +402,9 @@ function App() {
       setBusy(action)
       setNotice('')
 
+      if (['create','fund','submit','judge','withdraw','reclaim','reserve','release','toggle'].includes(action) && !profileReady) {
+        throw new Error(deploymentStatus)
+      }
       await task()
     } catch (error) {
       setNoticeKind(
@@ -523,9 +549,8 @@ function App() {
          * previous campaign
          * staying visible.
          */
-        setApplication(
-          null,
-        )
+        if (loadedCampaignId.current !== id) setApplication(null)
+        loadedCampaignId.current = id
       },
       [campaignId],
     )
@@ -706,7 +731,7 @@ function App() {
           } catch (fundError) {
             setNoticeKind('error')
             setNotice(
-              `Campaign "${createId.trim()}" was created successfully, but the funding transaction did not go through: ${reportError(
+              `Campaign "${createId.trim()}" was created successfully, but funding is not confirmed: ${reportError(
                 'fund',
                 fundError,
               )} Do not create it again - use Fund campaign below to add GEN.`,
@@ -983,7 +1008,7 @@ function App() {
 
           setNoticeKind('success')
           setNotice(
-            `${formatWei(availableBefore)} GEN reclaimed. Pool, Reserved, and Available were refreshed from accepted onchain state.`,
+            `${formatWei(availableBefore)} GEN removed from the pool for reclaim. Finalized execution and treasury are verified; check native transfer delivery in Explorer.`,
           )
         },
       )
@@ -1467,13 +1492,9 @@ function App() {
             return
           }
 
-          setNoticeKind(
-            'success',
-          )
-
-          setNotice(
-            `Consensus reached: ${status}`,
-          )
+          if (!status || status === 'PENDING') throw new Error('Adjudication state could not be confirmed. Refresh; do not resend.')
+          setNoticeKind('success')
+          setNotice(`Finalized adjudication verified: ${status}`)
         },
       )
 
@@ -1546,7 +1567,7 @@ function App() {
         )
 
         setNotice(
-          'Reward withdrawal verified onchain.',
+          'Withdrawal execution and ledger verified. Check the native transfer receipt in Explorer.',
         )
       },
     )
@@ -1571,7 +1592,7 @@ function App() {
       setNoticeKind('success')
       setNotice(
         kind === 'reserve'
-          ? 'Reward reserved for this contributor. The 30-day claim window has started.'
+          ? 'Reward reserved for this contributor. The UTC calendar-day claim window has started.'
           : 'Expired reservation released back to the campaign pool.',
       )
     })
@@ -1585,6 +1606,11 @@ function App() {
 
   return (
     <div className="app pro-app">
+      <div className="deployment-status" role="status">{deploymentStatus}</div>
+      {latestTx && <div className="deployment-status">
+        Transaction: <a href={`${EXPLORER_BASE}/tx/${latestTx.hash}`} target="_blank" rel="noreferrer">{latestTx.hash}</a>
+        {' · '}{latestTx.state}
+      </div>}
       <header className="topbar pro-topbar">
         <div className="brand-row">
           <div className="brand">
@@ -2220,7 +2246,7 @@ function App() {
                         </p>
                       ) : (
                         <p>
-                          Claim by {dayToDate(application.window.expiresDay)} (UTC) —{' '}
+                          Release eligible from {dayToDate(application.window.expiresDay)} (00:00 UTC) —{' '}
                           {application.window.expiresDay - application.window.today} day
                           {application.window.expiresDay - application.window.today === 1 ? '' : 's'} left.
                         </p>
@@ -2245,7 +2271,7 @@ function App() {
                         Judged eligible while the pool could not cover the reward.{' '}
                         {application.window?.reservableNow
                           ? 'The pool can cover it now — anyone can reserve it.'
-                          : 'It is reserved as soon as the pool can cover it.'}
+                          : 'Add funds, then anyone can reserve this reward.'}
                       </p>
                     </div>
                   )}
@@ -2269,7 +2295,7 @@ function App() {
 
                   {application.status === 'ELIGIBLE_PAID' && (
                     <div className="paid pro-paid">
-                      ✓ REWARD CLAIMED
+                      ✓ WITHDRAWAL RECORDED
                     </div>
                   )}
 
