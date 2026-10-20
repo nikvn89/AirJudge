@@ -1,6 +1,6 @@
-# Fresh runtime — contract 1.3.1
+# Runtime evidence — Milestone v4 draft / contract 1.3.1
 
-**Settlement runtime status: PARTIALLY VERIFIED (2026-10-20).** Source/profile parity is verified. The actual production campaign reached underfunded eligibility, late reservation, pause/reclaim and paid state. Native withdrawal is fully checked through finalized parent execution, linked credited transfer, recipient/value, independent balance increase and zero final treasury. Native creator reclaim is also verified through finalized parent execution, linked credited transfer and matching balance changes. Earlier campaign/application transaction hashes, signed negative cases and the real timed expiry path remain outstanding. See [runtime evidence](docs/evidence/v3-settlement-runtime.json) and [deployment evidence](docs/evidence/v3-deployment-check.json). Historical transactions are not reused as new runtime proof.
+**Settlement runtime status: PARTIALLY VERIFIED (2026-10-20).** Source/profile parity is verified. The actual production campaign reached underfunded eligibility, late reservation, pause/reclaim and paid state. Native withdrawal is fully checked through finalized parent execution, linked credited transfer, recipient/value, independent balance increase and zero final treasury. Native creator reclaim is also verified through finalized parent execution, linked credited transfer and matching balance changes. Earlier campaign/application transaction hashes, signed negative cases and the real timed expiry path remain outstanding. See [runtime evidence](docs/evidence/v4-settlement-runtime.json) and [deployment evidence](docs/evidence/v4-deployment-check.json). Historical transactions are not reused as new runtime proof.
 
 Claim parent: [0x002928439b94640fc0c4ce088ea3b91774ba16a39ca9951781d8a2e77e66b695](https://explorer-studio.genlayer.com/tx/0x002928439b94640fc0c4ce088ea3b91774ba16a39ca9951781d8a2e77e66b695).
 Native transfer: [0xed62d13fcf5997336b2ba93670059816f3f7b7347e512fe0a4d43b6de0bfb162](https://explorer-studio.genlayer.com/tx/0xed62d13fcf5997336b2ba93670059816f3f7b7347e512fe0a4d43b6de0bfb162).
@@ -11,9 +11,10 @@ Production dApp: https://air-judge.vercel.app. Campaign: `airjudge-v3-20261020-a
 ## Baselines and immutable comparison
 
 - Reviewed Project: `0c71578b2b992eb44e4d7b6d0b102dda772c8e8f`.
-- Accepted Milestone v2: `9ae45a5bdbd79da53da334c1f178c1eebd1ec090` (contract 1.2 source SHA `156ed2a5906649bc3ba620d7be87afb488fbe9ed80058c30bc3bc761fa5c362c`).
-- Uploaded archive head `eb18500e29a65311be8a011194e45f19de55e82b` already included an unverified 1.3.0 revision. It is not the accepted v2 baseline and is not the final submitted head for this release.
-- After the final upload, use the actual full 40-character Milestone v3 commit SHA as HEAD. Include immutable comparisons from the reviewed Project and, additionally, accepted v2 to that exact HEAD. Never use `main` or guess a commit.
+- Accepted Milestone v2: `9ae45a5bdbd79da53da334c1f178c1eebd1ec090`.
+- **Submitted Milestone v3 (pending review): `eb18500e29a65311be8a011194e45f19de55e82b`**, as shown by the pinned TESTING.md evidence in the 2026-10-19 submission. Its contract version is 1.3.0.
+- V4 must demonstrate its incremental changes against submitted v3. After the final v4 upload, use the actual full commit SHA as HEAD for both Project → v4 and submitted-v3 → v4 comparisons. Never call v3 accepted or approved while its review is pending. Portal eligibility for a new milestone while the previous one is pending has not been independently established.
+- The prior `ca77bef1b475b8b333b114b7ff4f3b28302dda79` working commit contains the implementation and runtime report before this classification correction. It is not the commit submitted in the original v3 application.
 
 ## Deployment and source
 

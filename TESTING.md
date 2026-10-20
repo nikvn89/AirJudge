@@ -1,9 +1,10 @@
-# Verification — contract 1.3.1 / Milestone v3
+# Verification — contract 1.3.1 / Milestone v4 draft
 
 ## Executed locally on 2026-10-20
 
 | Gate | Command | Actual result |
 |---|---|---|
+| Frozen submitted v3 baseline | `python3 -m pytest tests/ -q -p no:cacheprovider` in commit `eb18500e29a65311be8a011194e45f19de55e82b` | 46 passed, 87.12 s; pending-review submission |
 | Frozen accepted v2 baseline | `python3 -m pytest tests/ -q` in commit `9ae45a5bdbd79da53da334c1f178c1eebd1ec090` | 25 passed |
 | Production contract behavior | `python3 -m pytest tests/ -q` | 70 passed |
 | Receipt and settlement postconditions | `npm run test:frontend` | 38 passed |
@@ -35,12 +36,12 @@ A regression was reproduced on the uploaded 1.3.0 source: `not json` completed i
 
 The suite loads the production source through the actual SDK Direct Mode. It does not recreate a separate treasury implementation. Web responses and model verdicts are controlled; actual validator accuracy, consensus convergence, live web provenance and injection resistance are not established. Direct Mode cannot prove recipient delivery of emitted native transfers or asynchronous downstream failure recovery.
 
-## Fresh deployment gates
+## Current deployment gates
 
 | Gate | Current status |
 |---|---|
 | New 1.3.1 contract | Address `0x350A7F43117AE162976E441c8B23A5C2d4F98104` and profile verified; deployment transaction hash PENDING |
-| Deployed-source parity for 1.3.1 | PASS — [source/profile check](docs/evidence/v3-deployment-check.json), CRLF-to-LF only |
+| Deployed-source parity for 1.3.1 | PASS — [source/profile check](docs/evidence/v4-deployment-check.json), CRLF-to-LF only |
 | Actual validator eligibility/underfunding and later reservation | Finalized-state sequence observed; earlier transaction hashes still outstanding |
 | Native withdrawal/reclaim recipients and amounts | Withdrawal PASS: finalized parent leader SUCCESS, linked credited transfer and exact applicant balance increase. Reclaim PASS: finalized parent leader SUCCESS, linked credited transfer and exact creator balance increase |
 | Actual 30-calendar-day release transaction | PENDING — cannot accelerate the production clock |
@@ -52,6 +53,10 @@ A headless browser smoke test was attempted, but the browser download was trunca
 
 ## Observed production settlement
 
-On 2026-10-20 campaign `airjudge-v3-20261020-a` progressed through underfunded eligibility, late reservation, pause/reclaim and paid state. See [whitelisted chain evidence](docs/evidence/v3-settlement-runtime.json) for scope and timestamps. Claim parent `0x002928439b94640fc0c4ce088ea3b91774ba16a39ca9951781d8a2e77e66b695` finalized with authoritative leader SUCCESS and normal return. Its linked transfer `0xed62d13fcf5997336b2ba93670059816f3f7b7347e512fe0a4d43b6de0bfb162` finalized and credited exactly 0.001 GEN to the applicant. The independently observed applicant balance increased by that same amount; contract native balance and campaign treasury became zero. This does not establish the unexecuted expiry/replay/third-wallet paths.
+On 2026-10-20 campaign `airjudge-v3-20261020-a` progressed through underfunded eligibility, late reservation, pause/reclaim and paid state. See [whitelisted chain evidence](docs/evidence/v4-settlement-runtime.json) for scope and timestamps. Claim parent `0x002928439b94640fc0c4ce088ea3b91774ba16a39ca9951781d8a2e77e66b695` finalized with authoritative leader SUCCESS and normal return. Its linked transfer `0xed62d13fcf5997336b2ba93670059816f3f7b7347e512fe0a4d43b6de0bfb162` finalized and credited exactly 0.001 GEN to the applicant. The independently observed applicant balance increased by that same amount; contract native balance and campaign treasury became zero. This does not establish the unexecuted expiry/replay/third-wallet paths.
 
 Reclaim parent `0x92e25c55cf8f67acca92404114a9c9b618acf24085ff7d630f73177a6112e6f0` finalized with leader SUCCESS and normal return. Its linked transfer `0x8c5adb8eef58c32d3fcff0e1d82bc03a63cc964ddee4b6bfd0ec15d1d2e3b1e9` finalized and credited exactly 0.002 GEN to the creator. Creator balance increased by that amount while contract native balance fell from 0.003 to 0.001 GEN; the applicant reservation remained intact.
+
+## Submitted-v3 scope boundary
+
+The submitted v3 baseline is `eb18500e29a65311be8a011194e45f19de55e82b` and remains pending review. Claim-window release, late reservation and canonical URL identity are inherited v3 features, not new v4 functionality. The v4 increment is strict semantic-result validation, rollback on unavailable web/model inputs, authoritative receipt and method-specific postcondition verification, and associated regressions. The production campaign ID and public page paths contain `v3` because those are the actual identifiers used during the 2026-10-20 runtime; they have not been rewritten. See [MILESTONE_V4.md](MILESTONE_V4.md).

@@ -1,20 +1,22 @@
-# AirJudge — Milestone v3
+# AirJudge — Milestone v4 draft
 
 AirJudge is a GenLayer contribution-reward application: campaign creators fund native GEN pools, applicants publish wallet-bound evidence, and validators assess qualitative eligibility. Deterministic contract code reserves rewards, pays applicants and protects reservations when creators reclaim unused funds.
 
-This release builds on the accepted **Milestone v2** commit [`9ae45a5bdbd79da53da334c1f178c1eebd1ec090`](https://github.com/nikvn89/AirJudge/tree/9ae45a5bdbd79da53da334c1f178c1eebd1ec090). Contract **1.3.1** is deployed at [`0x350A7F43117AE162976E441c8B23A5C2d4F98104`](https://explorer-studio.genlayer.com/address/0x350A7F43117AE162976E441c8B23A5C2d4F98104). Deployed-source parity and the finalized-read profile were verified on 2026-10-20; the underfunded → reserved → paid state sequence was independently observed, and native withdrawal delivery is **VERIFIED** through its finalized parent and transfer receipts. Creator reclaim native delivery is also **VERIFIED**; earlier campaign/application receipts and the real timed expiry path remain outstanding. See [runtime evidence](docs/evidence/v3-settlement-runtime.json). The deployment transaction hash has not yet been supplied.
+This **Milestone v4 draft** builds on the **submitted, not yet reviewed Milestone v3** commit [`eb18500e29a65311be8a011194e45f19de55e82b`](https://github.com/nikvn89/AirJudge/tree/eb18500e29a65311be8a011194e45f19de55e82b). V3 was submitted on 2026-10-19 and remains pending review. Accepted Milestone v2 is `9ae45a5bdbd79da53da334c1f178c1eebd1ec090`; it is not substituted for the submitted-v3 baseline when describing the v4 increment.
 
-## What changes from v2
+Contract **1.3.1** remains deployed at [`0x350A7F43117AE162976E441c8B23A5C2d4F98104`](https://explorer-studio.genlayer.com/address/0x350A7F43117AE162976E441c8B23A5C2d4F98104). Milestone numbering is separate from contract versioning. Reclassifying this package does not change the deployed source, storage, campaign identifiers, or transaction evidence. Source/profile parity, native applicant withdrawal and native creator reclaim were independently verified. Earlier transaction receipts and timed-release coverage remain incomplete; see [TESTING.md](TESTING.md).
 
-| Situation | Accepted v2 / contract 1.2 | Milestone v3 / contract 1.3.1 |
+## What changes from submitted v3
+
+| Boundary | Submitted v3 / contract 1.3.0 | V4 draft / contract 1.3.1 |
 |---|---|---|
-| Approved reward never withdrawn | Reserved indefinitely | Anyone may release it from UTC calendar day `reservation_day + 30` |
-| Eligible applicant judged while unfunded | No late reservation operation | Anyone can reserve the configured reward once the available pool covers it |
-| Tracking-query / case / slash URL variants | Raw URL keys can count separately | Conservative canonical URL identity blocks those variants within the campaign |
-| Malformed model output | Could become a recorded negative verdict | Exact two-key JSON or transaction rollback; no verdict or treasury writes |
-| Browser transaction confirmation | Accepted-state polling | Finalized authoritative leader execution, normal-return tag, then action-specific finalized reads |
+| Invalid semantic result | A malformed response could become a permanent negative verdict | Exactly two JSON keys, typed nonempty reason and valid label; malformed/duplicate/wrapped output reverts before writes |
+| Unavailable proof or evidence | Fetch failure could be treated as rejected evidence | Distinguishes unavailable fetch from genuinely unbound proof; provider/fetch errors preserve the pending application |
+| Browser confirmation | No authoritative leader execution and action-delta gate | Requires finalized authoritative leader SUCCESS and normal return, then method-specific finalized-state postconditions |
+| Deployment identity | No exact 1.3.1 profile gate | Locks writes when the deployed profile is incompatible |
+| Settlement audit | Historical supplied test/evidence record | Production parent execution, linked credited native transfer and independent balance reconciliation for both withdrawal and reclaim |
 
-Release and late reservation do not call a model or move native value. Withdrawal and creator reclaim remain separate transfer operations. Release subtracts the pending reward from `reserved`, leaves `pool` unchanged and makes the value available again. Reclaim still transfers only `pool - reserved` after closing.
+The 30-day soft claim window, late reservation and canonical evidence identity **belong to v3**. V4 retains them as regression coverage and does not claim them again as new features. Public proof markers remain copyable and are not cryptographic authorship verification. [MILESTONE_V4.md](MILESTONE_V4.md) freezes the incremental scope and comparison policy.
 
 ## Claim-window semantics
 

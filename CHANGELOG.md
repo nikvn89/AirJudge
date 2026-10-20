@@ -1,14 +1,14 @@
 # Changelog
 
-## [1.3.1] — 2026-10-20 — Milestone v3 release candidate
+## [1.3.1] — 2026-10-20 — Milestone v4 draft
 
-- Retains the v3 date-based reservation release, late reservation and conservative URL replay identity from the supplied 1.3.0 candidate.
+- Incremental baseline is submitted Milestone v3 `eb18500e29a65311be8a011194e45f19de55e82b` (pending review), contract 1.3.0. Retains its date-based reservation release, late reservation and canonical URL identity as inherited features.
 - Strict JSON eligibility schema; malformed/duplicate/wrapped/uncertain output rolls back before writes.
 - Proof-fetch/evidence-fetch/provider failures preserve a pending application instead of recording a negative judgment.
 - Finalized leader execution and normal-return tag plus method-specific postcondition checks; wrong deployment profile locks writes.
 - Keeps the loaded application during a same-campaign refresh, removes demo amount defaults, exposes full transaction links and names the UTC calendar-day soft-expiry boundary explicitly.
 - Read-only source/profile/state verifier and frozen-source build check. Source and profile verified at `0x350A7F43117AE162976E441c8B23A5C2d4F98104`; production withdrawal and creator reclaim native deliveries are verified; remaining runtime receipt and expiry gaps are tracked in RUNTIME_TEST.md.
-- Accepted v2 commit preserved; historical evidence is labeled and retained separately.
+- Submitted v3 and accepted v2 commits remain immutable. Milestone v4 is a draft classification; contract stays 1.3.1 and no new deployment is implied.
 
 ## [1.3.0] — 2026-10-06 — Fair settlement: claim window, late reservation, one reward per contribution
 

@@ -1,6 +1,6 @@
 {
   "project": "AirJudge",
-  "milestone": "v3",
+  "milestone": "v4",
   "contract_version": "1.3.1",
   "network": "StudioNet",
   "chain_id": 61999,
@@ -15,11 +15,17 @@
     "address": "0x350A7F43117AE162976E441c8B23A5C2d4F98104",
     "transaction": null,
     "deploy_receipt_status": "PENDING_HASH",
-    "evidence": "docs/evidence/v3-deployment-check.json"
+    "evidence": "docs/evidence/v4-deployment-check.json"
   },
   "runtime_status": "PARTIALLY_VERIFIED",
   "head_evidence_policy": "Record the actual final GitHub HEAD externally after upload; do not embed a self-referential commit SHA.",
-  "runtime_evidence": "docs/evidence/v3-settlement-runtime.json",
+  "runtime_evidence": "docs/evidence/v4-settlement-runtime.json",
   "runtime_claim_status": "NATIVE_DELIVERY_VERIFIED",
-  "runtime_reclaim_status": "NATIVE_DELIVERY_VERIFIED"
+  "runtime_reclaim_status": "NATIVE_DELIVERY_VERIFIED",
+  "submission_status": "DRAFT",
+  "submitted_milestone_v3_commit": "eb18500e29a65311be8a011194e45f19de55e82b",
+  "submitted_milestone_v3_review_status": "PENDING_REVIEW",
+  "incremental_baseline_commit": "eb18500e29a65311be8a011194e45f19de55e82b",
+  "implementation_and_runtime_commit": "ca77bef1b475b8b333b114b7ff4f3b28302dda79",
+  "scope_document": "MILESTONE_V4.md"
 }
