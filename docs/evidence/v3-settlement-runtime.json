@@ -1,0 +1,204 @@
+{
+  "network": "StudioNet",
+  "chain_id": 61999,
+  "address": "0x350A7F43117AE162976E441c8B23A5C2d4F98104",
+  "campaign_id": "airjudge-v3-20261020-a",
+  "creator": "0x6276095FAEA15108740445ff277fdA8c304657F4",
+  "applicant": "0x037f58E33c1Ec8fdA272361E0aAC1e31054a1CDE",
+  "scope": "Independent finalized-state reads and native balances. Withdrawal and reclaim have verified finalized parent execution receipts and linked credited native transfer receipts; earlier campaign/application transaction hashes remain outstanding.",
+  "observations": [
+    {
+      "checked_at": "2026-10-20T12:57:20.068Z",
+      "status": "ELIGIBLE_UNDERFUNDED",
+      "active": true,
+      "pool_wei": "0",
+      "reserved_wei": "0",
+      "available_wei": "0",
+      "pending_wei": "0"
+    },
+    {
+      "checked_at": "2026-10-20T13:16:09.574Z",
+      "status": "ELIGIBLE_UNDERFUNDED",
+      "active": true,
+      "pool_wei": "3000000000000000",
+      "reserved_wei": "0",
+      "available_wei": "3000000000000000",
+      "reservable_now": true
+    },
+    {
+      "checked_at": "2026-10-20T13:41:17.845Z",
+      "status": "ELIGIBLE_RESERVED",
+      "active": true,
+      "pool_wei": "3000000000000000",
+      "reserved_wei": "1000000000000000",
+      "available_wei": "2000000000000000",
+      "pending_wei": "1000000000000000",
+      "reserved_day": 20746,
+      "expires_day": 20776
+    },
+    {
+      "checked_at": "2026-10-20T13:53:39.721Z",
+      "status": "ELIGIBLE_RESERVED",
+      "active": false,
+      "pool_wei": "1000000000000000",
+      "reserved_wei": "1000000000000000",
+      "available_wei": "0",
+      "pending_wei": "1000000000000000"
+    },
+    {
+      "checked_at": "2026-10-20T14:00:20.653Z",
+      "status": "ELIGIBLE_PAID",
+      "active": false,
+      "pool_wei": "0",
+      "reserved_wei": "0",
+      "available_wei": "0",
+      "pending_wei": "0"
+    }
+  ],
+  "withdrawal": {
+    "checked_at": "2026-10-20T14:01:20.799Z",
+    "transfer": {
+      "hash": "0xed62d13fcf5997336b2ba93670059816f3f7b7347e512fe0a4d43b6de0bfb162",
+      "status": "FINALIZED",
+      "from": "0x350A7F43117AE162976E441c8B23A5C2d4F98104",
+      "to": "0x037f58E33c1Ec8fdA272361E0aAC1e31054a1CDE",
+      "value": 1000000000000000,
+      "type": 0,
+      "triggered_by": "0x002928439b94640fc0c4ce088ea3b91774ba16a39ca9951781d8a2e77e66b695",
+      "triggered_on": "finalized",
+      "value_credited": true
+    },
+    "parent": {
+      "hash": "0x002928439b94640fc0c4ce088ea3b91774ba16a39ca9951781d8a2e77e66b695",
+      "status": "FINALIZED",
+      "from": "0x037f58E33c1Ec8fdA272361E0aAC1e31054a1CDE",
+      "to": "0x350A7F43117AE162976E441c8B23A5C2d4F98104",
+      "value": 0,
+      "type": 2,
+      "triggered_by": null,
+      "triggered_on": null,
+      "value_credited": false,
+      "execution": {
+        "state": "success"
+      },
+      "leader_execution": "SUCCESS",
+      "leader_result": "AAA=",
+      "triggered_transactions": [
+        "0xed62d13fcf5997336b2ba93670059816f3f7b7347e512fe0a4d43b6de0bfb162"
+      ]
+    }
+  },
+  "balances_before_withdrawal": {
+    "checked_at": "2026-10-20T13:54:02.087Z",
+    "block_tag": "latest",
+    "scope": "Post-reclaim and pre-withdraw balance observations; transaction receipts are still required for transfer attribution.",
+    "balances": [
+      {
+        "role": "creator",
+        "address": "0x6276095FAEA15108740445ff277fdA8c304657F4",
+        "balance_wei": "1010079000000000000000"
+      },
+      {
+        "role": "applicant",
+        "address": "0x037f58E33c1Ec8fdA272361E0aAC1e31054a1CDE",
+        "balance_wei": "27996000000000005000"
+      },
+      {
+        "role": "contract",
+        "address": "0x350A7F43117AE162976E441c8B23A5C2d4F98104",
+        "balance_wei": "1000000000000000"
+      }
+    ]
+  },
+  "balances_after_withdrawal": {
+    "checked_at": "2026-10-20T14:00:14.395Z",
+    "block_tag": "latest",
+    "scope": "Post-withdraw balance observations.",
+    "balances": [
+      {
+        "role": "creator",
+        "address": "0x6276095FAEA15108740445ff277fdA8c304657F4",
+        "balance_wei": "1010079000000000000000"
+      },
+      {
+        "role": "applicant",
+        "address": "0x037f58E33c1Ec8fdA272361E0aAC1e31054a1CDE",
+        "balance_wei": "27997000000000005000"
+      },
+      {
+        "role": "contract",
+        "address": "0x350A7F43117AE162976E441c8B23A5C2d4F98104",
+        "balance_wei": "0"
+      }
+    ]
+  },
+  "claim_result": "PASS: finalized parent leader SUCCESS with normal return, linked finalized transfer credited to applicant for 1000000000000000 wei, matching applicant balance increase, paid postcondition and zero treasury.",
+  "reclaim_result": "PASS: finalized parent leader SUCCESS with normal return; linked finalized credited transfer of 2000000000000000 wei to creator, matching creator balance increase and contract balance decrease. Reserved reward remained 1000000000000000 wei until applicant withdrawal.",
+  "not_executed_on_chain": [
+    "early release rejection",
+    "canonical URL replay rejection",
+    "third-wallet reservation",
+    "30-calendar-day expired release"
+  ],
+  "reclaim": {
+    "checked_at": "2026-10-20T14:11:10.098Z",
+    "parent": {
+      "hash": "0x92e25c55cf8f67acca92404114a9c9b618acf24085ff7d630f73177a6112e6f0",
+      "status": "FINALIZED",
+      "from": "0x6276095FAEA15108740445ff277fdA8c304657F4",
+      "to": "0x350A7F43117AE162976E441c8B23A5C2d4F98104",
+      "value": 0,
+      "type": 2,
+      "triggered_by": null,
+      "value_credited": false,
+      "execution": {
+        "state": "success"
+      },
+      "leader_execution": "SUCCESS",
+      "leader_result": "AAA=",
+      "triggered_transactions": [
+        "0x8c5adb8eef58c32d3fcff0e1d82bc03a63cc964ddee4b6bfd0ec15d1d2e3b1e9"
+      ],
+      "call": {
+        "args": [
+          "airjudge-v3-20261020-a"
+        ],
+        "method": "reclaim_unused_pool"
+      }
+    },
+    "children": [
+      {
+        "hash": "0x8c5adb8eef58c32d3fcff0e1d82bc03a63cc964ddee4b6bfd0ec15d1d2e3b1e9",
+        "status": "FINALIZED",
+        "from": "0x350A7F43117AE162976E441c8B23A5C2d4F98104",
+        "to": "0x6276095FAEA15108740445ff277fdA8c304657F4",
+        "value": 2000000000000000,
+        "type": 0,
+        "triggered_by": "0x92e25c55cf8f67acca92404114a9c9b618acf24085ff7d630f73177a6112e6f0",
+        "value_credited": true
+      }
+    ]
+  },
+  "balances_before_reclaim": {
+    "checked_at": "2026-10-20T13:41:52.320Z",
+    "block_tag": "latest",
+    "scope": "Pre-reclaim balance observations; transaction hashes are still required to attribute later changes.",
+    "balances": [
+      {
+        "role": "creator",
+        "address": "0x6276095FAEA15108740445ff277fdA8c304657F4",
+        "balance_wei": "1010077000000000000000"
+      },
+      {
+        "role": "applicant",
+        "address": "0x037f58E33c1Ec8fdA272361E0aAC1e31054a1CDE",
+        "balance_wei": "27996000000000005000"
+      },
+      {
+        "role": "contract",
+        "address": "0x350A7F43117AE162976E441c8B23A5C2d4F98104",
+        "balance_wei": "3000000000000000"
+      }
+    ]
+  }
+}

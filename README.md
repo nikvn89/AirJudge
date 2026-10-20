@@ -2,7 +2,7 @@
 
 AirJudge is a GenLayer contribution-reward application: campaign creators fund native GEN pools, applicants publish wallet-bound evidence, and validators assess qualitative eligibility. Deterministic contract code reserves rewards, pays applicants and protects reservations when creators reclaim unused funds.
 
-This release builds on the accepted **Milestone v2** commit [`9ae45a5bdbd79da53da334c1f178c1eebd1ec090`](https://github.com/nikvn89/AirJudge/tree/9ae45a5bdbd79da53da334c1f178c1eebd1ec090). Contract release **1.3.1** is prepared locally; its new deployment and production runtime are **PENDING**. Do not use the previous 1.3.0 address for this source.
+This release builds on the accepted **Milestone v2** commit [`9ae45a5bdbd79da53da334c1f178c1eebd1ec090`](https://github.com/nikvn89/AirJudge/tree/9ae45a5bdbd79da53da334c1f178c1eebd1ec090). Contract **1.3.1** is deployed at [`0x350A7F43117AE162976E441c8B23A5C2d4F98104`](https://explorer-studio.genlayer.com/address/0x350A7F43117AE162976E441c8B23A5C2d4F98104). Deployed-source parity and the finalized-read profile were verified on 2026-10-20; the underfunded → reserved → paid state sequence was independently observed, and native withdrawal delivery is **VERIFIED** through its finalized parent and transfer receipts. Creator reclaim native delivery is also **VERIFIED**; earlier campaign/application receipts and the real timed expiry path remain outstanding. See [runtime evidence](docs/evidence/v3-settlement-runtime.json). The deployment transaction hash has not yet been supplied.
 
 ## What changes from v2
 
@@ -46,18 +46,18 @@ npm run dev
 
 ## Deployment configuration
 
-The new address has not been supplied. The default address and `.env.example` are intentionally empty; writes remain locked until a deployment reports the required 1.3.1 profile.
+The default address and `.env.example` point to `0x350A7F43117AE162976E441c8B23A5C2d4F98104`. Writes require the 1.3.1 profile. If a legacy `VITE_CONTRACT_ADDRESS` is set in Vercel, update it: an environment override takes precedence over the default.
 
-After deploying the exact `contracts/airjudge.py` source on **StudioNet, chain 61999**, verify source parity:
+On **StudioNet, chain 61999**, recheck the deployed source with:
 
 ```bash
-npm run check:deployment -- --address YOUR_DEPLOYED_ADDRESS
+npm run check:deployment -- --address 0x350A7F43117AE162976E441c8B23A5C2d4F98104
 ```
 
-The command is read-only and checks CRLF-to-LF normalized SHA-256; it does not ignore trailing newlines. Record the real address/deploy transaction in `release.json` and [RUNTIME_TEST.md](RUNTIME_TEST.md). Then set this public Vercel environment variable and redeploy:
+The command is read-only and checks CRLF-to-LF normalized SHA-256; it does not ignore trailing newlines. The address is recorded in `release.json`; add the deployment transaction hash once known. Use this public Vercel environment variable and redeploy:
 
 ```text
-VITE_CONTRACT_ADDRESS=YOUR_VERIFIED_1_3_1_ADDRESS
+VITE_CONTRACT_ADDRESS=0x350A7F43117AE162976E441c8B23A5C2d4F98104
 ```
 
 Vercel: `npm run build`, output `dist`; the included `/genlayer-rpc` rewrite keeps browser reads same-origin. There are no backend secrets. Private keys and seed phrases must never be added to configuration. Existing campaigns are not migrated to the new address.

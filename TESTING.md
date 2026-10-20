@@ -39,13 +39,19 @@ The suite loads the production source through the actual SDK Direct Mode. It doe
 
 | Gate | Current status |
 |---|---|
-| New 1.3.1 address and deployment transaction | PENDING — user signature/deployment required |
-| Deployed-source parity for 1.3.1 | PENDING |
-| Actual validator eligibility/underfunding and later reservation | PENDING |
-| Native withdrawal/reclaim recipients and amounts | PENDING |
+| New 1.3.1 contract | Address `0x350A7F43117AE162976E441c8B23A5C2d4F98104` and profile verified; deployment transaction hash PENDING |
+| Deployed-source parity for 1.3.1 | PASS — [source/profile check](docs/evidence/v3-deployment-check.json), CRLF-to-LF only |
+| Actual validator eligibility/underfunding and later reservation | Finalized-state sequence observed; earlier transaction hashes still outstanding |
+| Native withdrawal/reclaim recipients and amounts | Withdrawal PASS: finalized parent leader SUCCESS, linked credited transfer and exact applicant balance increase. Reclaim PASS: finalized parent leader SUCCESS, linked credited transfer and exact creator balance increase |
 | Actual 30-calendar-day release transaction | PENDING — cannot accelerate the production clock |
 | Signed early-release/duplicate-URL rollback and unchanged state | PENDING |
-| Final Vercel URL and exact submitted commit | PENDING |
-| Browser wallet switching, mobile layout, production smoke | NOT RUN — browser binary unavailable in this environment; production URL also not supplied |
+| Final Vercel URL and exact submitted commit | https://air-judge.vercel.app is live; exact submitted commit pending |
+| Browser wallet switching, mobile layout, production smoke | Automated browser test NOT RUN — browser binary unavailable. User screenshots show the production flow; no automated wallet/mobile PASS claimed |
 
 A headless browser smoke test was attempted, but the browser download was truncated; no visual/browser PASS is claimed. The production build and pure frontend tests did execute. [RUNTIME_TEST.md](RUNTIME_TEST.md) specifies the remaining evidence. Historical material is under `docs/history` and is not runtime proof for 1.3.1.
+
+## Observed production settlement
+
+On 2026-10-20 campaign `airjudge-v3-20261020-a` progressed through underfunded eligibility, late reservation, pause/reclaim and paid state. See [whitelisted chain evidence](docs/evidence/v3-settlement-runtime.json) for scope and timestamps. Claim parent `0x002928439b94640fc0c4ce088ea3b91774ba16a39ca9951781d8a2e77e66b695` finalized with authoritative leader SUCCESS and normal return. Its linked transfer `0xed62d13fcf5997336b2ba93670059816f3f7b7347e512fe0a4d43b6de0bfb162` finalized and credited exactly 0.001 GEN to the applicant. The independently observed applicant balance increased by that same amount; contract native balance and campaign treasury became zero. This does not establish the unexecuted expiry/replay/third-wallet paths.
+
+Reclaim parent `0x92e25c55cf8f67acca92404114a9c9b618acf24085ff7d630f73177a6112e6f0` finalized with leader SUCCESS and normal return. Its linked transfer `0x8c5adb8eef58c32d3fcff0e1d82bc03a63cc964ddee4b6bfd0ec15d1d2e3b1e9` finalized and credited exactly 0.002 GEN to the creator. Creator balance increased by that amount while contract native balance fell from 0.003 to 0.001 GEN; the applicant reservation remained intact.

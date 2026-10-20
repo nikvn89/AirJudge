@@ -11,10 +11,15 @@
   "normalized_sha256": "bf4db63a5836f00a030b513563657088caee9f643a1339ff6864bf1118a12a78",
   "source_normalization": "CRLF to LF only",
   "deployment": {
-    "status": "PENDING",
-    "address": null,
-    "transaction": null
+    "status": "SOURCE_AND_PROFILE_VERIFIED",
+    "address": "0x350A7F43117AE162976E441c8B23A5C2d4F98104",
+    "transaction": null,
+    "deploy_receipt_status": "PENDING_HASH",
+    "evidence": "docs/evidence/v3-deployment-check.json"
   },
-  "runtime_status": "PENDING",
-  "head_evidence_policy": "Record the actual final GitHub HEAD externally after upload; do not embed a self-referential commit SHA."
+  "runtime_status": "PARTIALLY_VERIFIED",
+  "head_evidence_policy": "Record the actual final GitHub HEAD externally after upload; do not embed a self-referential commit SHA.",
+  "runtime_evidence": "docs/evidence/v3-settlement-runtime.json",
+  "runtime_claim_status": "NATIVE_DELIVERY_VERIFIED",
+  "runtime_reclaim_status": "NATIVE_DELIVERY_VERIFIED"
 }

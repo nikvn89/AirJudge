@@ -7,7 +7,7 @@
 - Proof-fetch/evidence-fetch/provider failures preserve a pending application instead of recording a negative judgment.
 - Finalized leader execution and normal-return tag plus method-specific postcondition checks; wrong deployment profile locks writes.
 - Keeps the loaded application during a same-campaign refresh, removes demo amount defaults, exposes full transaction links and names the UTC calendar-day soft-expiry boundary explicitly.
-- Read-only source/profile/state verifier and frozen-source build check. New production deployment, source parity and runtime proof remain PENDING.
+- Read-only source/profile/state verifier and frozen-source build check. Source and profile verified at `0x350A7F43117AE162976E441c8B23A5C2d4F98104`; production withdrawal and creator reclaim native deliveries are verified; remaining runtime receipt and expiry gaps are tracked in RUNTIME_TEST.md.
 - Accepted v2 commit preserved; historical evidence is labeled and retained separately.
 
 ## [1.3.0] — 2026-10-06 — Fair settlement: claim window, late reservation, one reward per contribution
