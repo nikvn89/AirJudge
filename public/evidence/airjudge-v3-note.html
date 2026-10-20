@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AirJudge: pool, reservations and creator reclaim</title><style>body{font:18px/1.65 system-ui,sans-serif;max-width:780px;margin:48px auto;padding:0 20px;color:#172033}h1,h2{line-height:1.25}code,pre{font-size:.9em;background:#f0f2f8;padding:4px;overflow-wrap:anywhere;white-space:pre-wrap}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccd3df;padding:10px;text-align:left}.meta{font-size:14px;overflow-wrap:anywhere;color:#526078}</style></head>
+<body><article>
+<h1>AirJudge: understanding the pool, reserved rewards and creator reclaim</h1>
+<p class="meta">Public contribution note for campaign <code>airjudge-v3-20261020-a</code>. Applicant wallet: <code>0x037f58E33c1Ec8fdA272361E0aAC1e31054a1CDE</code>. Contract version 1.3.1, StudioNet.</p>
+<h2>Three treasury numbers</h2>
+<p>The campaign <strong>pool</strong> is its funded GEN balance tracked by the contract. <strong>Reserved</strong> is the portion promised to eligible applicants that has not yet been withdrawn or released. <strong>Available</strong> is the remaining unreserved amount: pool minus reserved, clamped to zero.</p>
+<p>An eligibility judgment does not create money. If the available pool cannot cover the configured reward, the application becomes <code>ELIGIBLE_UNDERFUNDED</code>. After the creator adds sufficient funds, anyone can call <code>reserve_underfunded</code> for that applicant. This deterministic action uses the recorded verdict; it does not ask the model to judge the contribution again.</p>
+<h2>A worked numerical example</h2>
+<p>The following figures are a hypothetical accounting example, not a claim that these transfers have already happened in this campaign. Suppose a creator funds 0.003 GEN and an eligible applicant reserves a reward of 0.001 GEN.</p>
+<table><thead><tr><th>Stage</th><th>Pool (GEN)</th><th>Reserved (GEN)</th><th>Available (GEN)</th></tr></thead><tbody>
+<tr><td>After funding</td><td>0.003</td><td>0</td><td>0.003</td></tr>
+<tr><td>After reserving one reward</td><td>0.003</td><td>0.001</td><td>0.002</td></tr>
+<tr><td>After closing and reclaiming unused funds</td><td>0.001</td><td>0.001</td><td>0</td></tr>
+<tr><td>After the applicant withdraws the reserved reward</td><td>0</td><td>0</td><td>0</td></tr>
+</tbody></table>
+<p>The creator must first make the campaign inactive before calling <code>reclaim_unused_pool</code>. That operation transfers only the available 0.002 GEN in this example. The reserved 0.001 GEN stays protected and remains withdrawable by its applicant. Reclaim does not cancel an existing reservation.</p>
+<h2>What if the applicant never withdraws?</h2>
+<p>A reservation becomes release-eligible at 00:00 UTC on the calendar date thirty days after its reservation date. This is a date-based rule, not necessarily 720 elapsed hours. Anyone can then call <code>release_expired_reservation</code>. Release clears that applicant's pending reward and reduces reserved by the same amount; pool does not change. No GEN is transferred by the release itself.</p>
+<p>Release is not automatic. Until a release transaction executes, an overdue applicant can still withdraw. The first successful withdrawal or release makes the other operation unavailable. Released value becomes available to the campaign; only the creator may reclaim it, and only while the campaign is inactive.</p>
+<h2>Evidence and execution</h2>
+<p>Eligibility is a bounded validator judgment about the published contribution. Pool accounting, roles and settlement are deterministic. A finalized transaction label alone does not prove successful execution or native delivery: inspect the leader execution, resulting state and actual transfer when value moves. This note explains the mechanism and does not claim a completed runtime test.</p>
+<p class="meta">Published contribution URL: <a href="https://air-judge.vercel.app/evidence/airjudge-v3-note.html">https://air-judge.vercel.app/evidence/airjudge-v3-note.html</a></p>
+</article></body></html>
